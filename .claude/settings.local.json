@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(go version *)",
+      "Bash(wails version *)",
+      "Bash(cmd.exe *)",
+      "Bash(powershell *)"
+    ]
+  }
+}
