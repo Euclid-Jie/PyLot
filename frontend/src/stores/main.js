@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, reactive } from 'vue'
+import { GetLatestLog } from '../../wailsjs/go/main/App.js'
 
 export const useMainStore = defineStore('main', () => {
   const selectedScriptID = ref(null)
@@ -8,6 +9,7 @@ export const useMainStore = defineStore('main', () => {
   const currentLogs = ref([])
   const scriptListVersion = ref(0)
   const selectedScriptWorkDir = ref('')
+  const selectedWorkflowId = ref(null)
 
   function setScript(id) {
     selectedScriptID.value = id
@@ -16,7 +18,23 @@ export const useMainStore = defineStore('main', () => {
     selectedScriptWorkDir.value = ''
   }
 
+  async function setScriptFromWorkflow(id) {
+    selectedScriptID.value = id
+    currentView.value = 'script'
+    selectedScriptWorkDir.value = ''
+    const rec = await GetLatestLog(id)
+    if (rec?.logOutput) {
+      currentLogs.value = rec.logOutput.split('\n').filter(Boolean).map(line => ({
+        scriptID: id, line, isError: rec.isError === 1,
+        timestamp: new Date(rec.startedAt).toLocaleTimeString('zh-CN', { hour12: false })
+      }))
+    } else {
+      currentLogs.value = []
+    }
+  }
+
   function setView(view) { currentView.value = view }
+  function openWorkflow(id) { selectedWorkflowId.value = id; currentView.value = 'workflow' }
   function addLog(entry) { currentLogs.value.push(entry) }
   function clearLogs() { currentLogs.value = [] }
   function setRunning(scriptID, running) {
@@ -25,5 +43,5 @@ export const useMainStore = defineStore('main', () => {
   }
   function refreshScriptList() { scriptListVersion.value++ }
 
-  return { selectedScriptID, currentView, runningScripts, currentLogs, scriptListVersion, selectedScriptWorkDir, setScript, setView, addLog, clearLogs, setRunning, refreshScriptList }
+  return { selectedScriptID, currentView, runningScripts, currentLogs, scriptListVersion, selectedScriptWorkDir, selectedWorkflowId, setScript, setScriptFromWorkflow, setView, openWorkflow, addLog, clearLogs, setRunning, refreshScriptList }
 })

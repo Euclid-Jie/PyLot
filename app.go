@@ -14,6 +14,7 @@ import (
 	"script-manager/internal/env"
 	"script-manager/internal/scheduler"
 	"script-manager/internal/script"
+	"script-manager/internal/workflow"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -53,9 +54,7 @@ func (a *App) loadSchedules() {
 		var schedID, scriptID int
 		var cronExpr string
 		rows.Scan(&schedID, &scriptID, &cronExpr)
-		scheduler.AddJob(schedID, scriptID, cronExpr, func(sid int) {
-			a.RunScript(sid, "")
-		})
+		a.addScheduleJob(schedID, scriptID, cronExpr)
 	}
 }
 
@@ -69,8 +68,28 @@ func (a *App) OpenDirectoryDialog(title string) string {
 	return path
 }
 
+func (a *App) GetWindowSize() (int, int) {
+	return runtime.WindowGetSize(a.ctx)
+}
+
+func (a *App) SetWindowSize(w, h int) {
+	runtime.WindowSetSize(a.ctx, w, h)
+}
+
 func (a *App) OpenInVSCode(dir string) {
-	cmd := exec.Command("code", dir)
+	candidates := []string{
+		filepath.Join(os.Getenv("LOCALAPPDATA"), `Programs\Microsoft VS Code\bin\code.cmd`),
+		filepath.Join(os.Getenv("ProgramFiles"), `Microsoft VS Code\bin\code.cmd`),
+		filepath.Join(os.Getenv("ProgramW6432"), `Microsoft VS Code\bin\code.cmd`),
+	}
+	codePath := "code"
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			codePath = p
+			break
+		}
+	}
+	cmd := exec.Command("cmd", "/c", codePath, dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 	cmd.Start()
 }
@@ -287,11 +306,18 @@ func (a *App) SaveSchedule(s db.Schedule) error {
 
 	scheduler.RemoveJob(s.ID)
 	if s.Enabled == 1 {
-		scheduler.AddJob(s.ID, s.ScriptID, s.CronExpr, func(sid int) {
-			a.RunScript(sid, "")
-		})
+		a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr)
 	}
 	return nil
+}
+
+func (a *App) addScheduleJob(schedID, scriptID int, cronExpr string) {
+	if scriptID < 0 {
+		wfID := -scriptID
+		scheduler.AddJob(schedID, scriptID, cronExpr, func(_ int) { a.RunWorkflow(wfID) })
+	} else {
+		scheduler.AddJob(schedID, scriptID, cronExpr, func(sid int) { a.RunScript(sid, "") })
+	}
 }
 
 func (a *App) DeleteSchedule(id int) error {
@@ -316,20 +342,130 @@ func (a *App) ToggleSchedule(id int, enabled bool) error {
 
 	scheduler.RemoveJob(id)
 	if enabled {
-		scheduler.AddJob(id, scriptID, cronExpr, func(sid int) {
-			a.RunScript(sid, "")
-		})
+		a.addScheduleJob(id, scriptID, cronExpr)
 	}
 	return nil
 }
 
 func (a *App) GetScheduleOverview() []scheduler.ScheduleInfo {
-	infos := scheduler.GetNextRunTimes()
-	for i := range infos {
-		s, _ := script.GetByID(infos[i].ScriptID)
-		if s != nil {
-			infos[i].ScriptName = s.Name
-		}
+	// Load all schedules from DB (including disabled)
+	rows, _ := db.DB.Query(`SELECT id,script_id,cron_expr,enabled FROM schedules ORDER BY id`)
+	defer rows.Close()
+
+	nextRuns := map[int]scheduler.ScheduleInfo{}
+	for _, info := range scheduler.GetNextRunTimes() {
+		nextRuns[info.ScheduleID] = info
 	}
-	return infos
+
+	var result []scheduler.ScheduleInfo
+	for rows.Next() {
+		var schedID, scriptID, enabled int
+		var cronExpr string
+		rows.Scan(&schedID, &scriptID, &cronExpr, &enabled)
+		s, _ := script.GetByID(scriptID)
+		name := ""
+		if s != nil {
+			name = s.Name
+		}
+		info := scheduler.ScheduleInfo{
+			ScheduleID: schedID,
+			ScriptID:   scriptID,
+			ScriptName: name,
+			CronExpr:   cronExpr,
+			Enabled:    enabled == 1,
+		}
+		if nr, ok := nextRuns[schedID]; ok {
+			info.NextRun = nr.NextRun
+		}
+		result = append(result, info)
+	}
+	return result
+}
+
+// --- Workflow ---
+
+func (a *App) GetWorkflows() []db.Workflow {
+	rows, _ := db.DB.Query(`SELECT id,name,graph,created_at,updated_at FROM workflows ORDER BY id`)
+	defer rows.Close()
+	var list []db.Workflow
+	for rows.Next() {
+		var w db.Workflow
+		rows.Scan(&w.ID, &w.Name, &w.Graph, &w.CreatedAt, &w.UpdatedAt)
+		list = append(list, w)
+	}
+	return list
+}
+
+func (a *App) SaveWorkflow(w db.Workflow) (int, error) {
+	now := time.Now()
+	if w.ID == 0 {
+		res, err := db.DB.Exec(`INSERT INTO workflows(name,graph,created_at,updated_at) VALUES(?,?,?,?)`,
+			w.Name, w.Graph, now, now)
+		if err != nil {
+			return 0, err
+		}
+		id, _ := res.LastInsertId()
+		return int(id), nil
+	}
+	_, err := db.DB.Exec(`UPDATE workflows SET name=?,graph=?,updated_at=? WHERE id=?`,
+		w.Name, w.Graph, now, w.ID)
+	return w.ID, err
+}
+
+func (a *App) DeleteWorkflow(id int) error {
+	_, err := db.DB.Exec(`DELETE FROM workflows WHERE id=?`, id)
+	return err
+}
+
+func (a *App) RunWorkflow(id int) error {
+	cfg := a.GetGlobalConfig()
+	go func() {
+		err := workflow.Run(a.ctx, id, cfg.EnvFilePath, func(runID int, nodeID string, scriptID int, status string) {
+			runtime.EventsEmit(a.ctx, "workflow:node-status", map[string]interface{}{
+				"runId":    runID,
+				"nodeId":   nodeID,
+				"scriptId": scriptID,
+				"status":   status,
+			})
+			// Also emit task:status so LogPanel spinner works
+			runtime.EventsEmit(a.ctx, "task:status", map[string]interface{}{
+				"scriptID": scriptID,
+				"status":   status,
+			})
+		})
+		status := "success"
+		if err != nil {
+			status = "error"
+		}
+		runtime.EventsEmit(a.ctx, "workflow:status", map[string]interface{}{
+			"workflowId": id,
+			"status":     status,
+		})
+	}()
+	return nil
+}
+
+func (a *App) GetWorkflowRuns(id int) []db.WorkflowRun {
+	rows, _ := db.DB.Query(`SELECT id,workflow_id,status,started_at,ended_at FROM workflow_runs WHERE workflow_id=? ORDER BY id DESC LIMIT 20`, id)
+	defer rows.Close()
+	var list []db.WorkflowRun
+	for rows.Next() {
+		var r db.WorkflowRun
+		rows.Scan(&r.ID, &r.WorkflowID, &r.Status, &r.StartedAt, &r.EndedAt)
+		list = append(list, r)
+	}
+	return list
+}
+
+func (a *App) CopyWorkflow(id int) (int, error) {
+	var name, graph string
+	db.DB.QueryRow(`SELECT name,graph FROM workflows WHERE id=?`, id).Scan(&name, &graph)
+	now := time.Now()
+	res, err := db.DB.Exec(`INSERT INTO workflows(name,graph,created_at,updated_at) VALUES(?,?,?,?)`,
+		name+" (副本)", graph, now, now)
+	if err != nil {
+		return 0, err
+	}
+	newID, _ := res.LastInsertId()
+	return int(newID), nil
 }

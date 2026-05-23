@@ -4,7 +4,8 @@
       "Bash(go version *)",
       "Bash(wails version *)",
       "Bash(cmd.exe *)",
-      "Bash(powershell *)"
+      "Bash(powershell *)",
+      "Bash(go build *)"
     ]
   }
 }

@@ -28,6 +28,7 @@ func main() {
 			systray.SetTooltip("PyLot")
 
 			show := systray.AddMenuItem("显示主窗口", "")
+			schedule := systray.AddMenuItem("定时任务", "")
 			systray.AddSeparator()
 			quit := systray.AddMenuItem("退出程序", "")
 
@@ -36,6 +37,9 @@ func main() {
 					select {
 					case <-show.ClickedCh:
 						runtime.WindowShow(app.ctx)
+					case <-schedule.ClickedCh:
+						runtime.WindowShow(app.ctx)
+						runtime.EventsEmit(app.ctx, "tray:schedule")
 					case <-quit.ClickedCh:
 						app.shutdown(app.ctx)
 						os.Exit(0)

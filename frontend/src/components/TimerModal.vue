@@ -33,6 +33,7 @@
         <button class="btn-primary" @click="handleSave">保存</button>
         <button class="btn-cancel" @click="$emit('close')">取消</button>
       </div>
+      <div v-if="toast" class="toast">{{ toast }}</div>
     </div>
   </div>
 </template>
@@ -49,6 +50,7 @@ const timeVal = ref('08:00')
 const selectedDays = ref([1])
 const enabled = ref(true)
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+const toast = ref('')
 
 const cronPreview = computed(() => {
   const [h, m] = timeVal.value.split(':')
@@ -64,7 +66,8 @@ async function handleSave() {
     cronExpr: cronPreview.value,
     enabled: enabled.value ? 1 : 0,
   })
-  emit('close')
+  toast.value = '定时设置成功'
+  setTimeout(() => emit('close'), 1200)
 }
 </script>
 
@@ -81,4 +84,5 @@ code { background: #252526; padding: 4px 8px; border-radius: 3px; font-size: 13p
 .modal-actions { display: flex; gap: 8px; margin-top: 16px; }
 .btn-primary { background: #2196f3; color: #fff; border: none; padding: 7px 16px; border-radius: 4px; }
 .btn-cancel { background: #555; color: #ccc; border: none; padding: 7px 16px; border-radius: 4px; }
+.toast { margin-top: 12px; text-align: center; color: #4caf50; font-size: 13px; }
 </style>

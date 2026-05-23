@@ -12,15 +12,19 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="item in overview" :key="item.scheduleId">
-          <td>{{ item.scriptName }}</td>
+        <tr v-for="item in overview" :key="item.scheduleId" :class="item.scriptId < 0 ? 'row-wf' : 'row-script'">
+          <td>
+            <div class="name-cell">
+              <span class="type-dot" :class="item.scriptId < 0 ? 'wf' : 'sc'"></span>
+              {{ item.scriptId < 0 ? (item.scriptName || '工作流') : item.scriptName }}
+            </div>
+          </td>
           <td><code>{{ item.cronExpr }}</code></td>
           <td>{{ fmtTime(item.nextRun) }}</td>
           <td>
-            <label class="toggle">
-              <input type="checkbox" :checked="item.enabled" @change="toggle(item)" />
-              <span>{{ item.enabled ? '启用' : '禁用' }}</span>
-            </label>
+            <button :class="['btn-toggle', item.enabled ? 'on' : 'off']" @click="toggle(item)">
+              {{ item.enabled ? '启用' : '禁用' }}
+            </button>
           </td>
           <td><button class="btn-del" @click="del(item.scheduleId)">删除</button></td>
         </tr>
@@ -68,11 +72,18 @@ async function del(id) {
 .schedule-view { padding: 4px; }
 h2 { margin-bottom: 16px; font-size: 16px; }
 table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: left; padding: 8px 12px; background: #0f3460; color: #aaa; font-weight: normal; }
-td { padding: 8px 12px; border-bottom: 1px solid #222; }
+th { text-align: center; padding: 8px 12px; background: var(--surface); color: var(--text-muted); font-weight: normal; }
+th:first-child { text-align: left; }
+td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
+td:first-child { text-align: left; }
+.name-cell { display: flex; align-items: center; gap: 8px; }
+.type-dot { width: 3px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+.type-dot.sc { background: var(--accent); }
+.type-dot.wf { background: #e65100; }
 code { background: #252526; padding: 2px 6px; border-radius: 3px; color: #4caf50; }
-.toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.toggle input { cursor: pointer; }
+.btn-toggle { padding: 3px 12px; border-radius: 12px; border: none; font-size: 12px; cursor: pointer; font-weight: 500; }
+.btn-toggle.on  { background: #e65100; color: #fff; }
+.btn-toggle.off { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
 .btn-del { background: #3a3a3a; color: #e74c3c; border: 1px solid #555; padding: 3px 10px; border-radius: 4px; font-size: 12px; }
 .empty { color: #666; text-align: center; margin-top: 60px; font-size: 14px; }
 </style>

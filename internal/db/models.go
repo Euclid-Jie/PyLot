@@ -48,3 +48,19 @@ type RunningTask struct {
 	PID       int       `json:"pid"`
 	StartedAt time.Time `json:"startedAt"`
 }
+
+type Workflow struct {
+	ID        int       `json:"id"`
+	Name      string    `json:"name"`
+	Graph     string    `json:"graph"` // JSON: {nodes:[{id,scriptId,x,y}], edges:[{source,target}]}
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+type WorkflowRun struct {
+	ID         int        `json:"id"`
+	WorkflowID int        `json:"workflowId"`
+	Status     string     `json:"status"`
+	StartedAt  time.Time  `json:"startedAt"`
+	EndedAt    *time.Time `json:"endedAt"`
+}

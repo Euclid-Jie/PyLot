@@ -1,5 +1,6 @@
 <template>
   <div class="sidebar-inner">
+    <!-- 脚本管理 header -->
     <div class="sidebar-header">
       <span>脚本管理</span>
       <button class="btn-add" @click="newScript">+</button>
@@ -24,28 +25,44 @@
       </div>
     </div>
 
-    <div class="sidebar-footer">
-      <div class="env-section">
-        <div class="env-label">全局 .env</div>
-        <div class="env-row">
-          <input v-model="envPath" placeholder="选择 .env 路径" />
-          <button @click="browseEnv">…</button>
+    <!-- 工作流管理 header -->
+    <div class="sidebar-header wf-header-section">
+      <span>工作流</span>
+      <button class="btn-add" @click="newWorkflow">+</button>
+    </div>
+
+    <div class="category">
+      <div class="cat-scripts">
+        <div
+          v-for="w in allWorkflows"
+          :key="'wf-' + w.id"
+          class="script-item"
+          :class="{ active: store.selectedWorkflowId === w.id && store.currentView === 'workflow' }"
+          @click="store.openWorkflow(w.id)"
+        >
+          <span class="script-name">{{ w.name }}</span>
+          <span v-if="store.runningScripts.has(-w.id)" class="spinner">⟳</span>
         </div>
-        <button class="btn-env-save" @click="saveEnv">保存</button>
       </div>
-      <button class="btn-schedule" @click="store.setView('schedule')">📅 Schedule</button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="footer-row">
+        <button class="btn-footer" @click="store.setView('schedule')">📅 Schedule</button>
+        <button class="btn-footer btn-settings" @click="store.setView('settings')">⚙️</button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { GetScripts, GetGlobalConfig, SaveGlobalConfig, OpenFileDialog } from '../../wailsjs/go/main/App.js'
+import { GetScripts, GetWorkflows } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 
 const store = useMainStore()
 const allScripts = ref([])
-const envPath = ref('')
+const allWorkflows = ref([])
 
 const categories = ref([
   { key: 'crawler', label: '数据爬取上传', icon: '🕷', open: true },
@@ -55,11 +72,15 @@ const categories = ref([
 
 onMounted(async () => {
   await loadScripts()
+  allWorkflows.value = await GetWorkflows() || []
   const cfg = await GetGlobalConfig()
   envPath.value = cfg.envFilePath || ''
 })
 
-watch(() => store.scriptListVersion, loadScripts)
+watch(() => store.scriptListVersion, async () => {
+  await loadScripts()
+  allWorkflows.value = await GetWorkflows() || []
+})
 
 async function loadScripts() {
   allScripts.value = await GetScripts() || []
@@ -73,37 +94,30 @@ function newScript() {
   store.setScript(-1)
 }
 
-async function browseEnv() {
-  const p = await OpenFileDialog('选择 .env 文件')
-  if (p) envPath.value = p
-}
-
-async function saveEnv() {
-  await SaveGlobalConfig({ envFilePath: envPath.value })
+function newWorkflow() {
+  store.selectedWorkflowId = null
+  store.setView('workflow')
 }
 </script>
 
 <style scoped>
 .sidebar-inner { display: flex; flex-direction: column; height: 100%; }
-.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid #0f3460; font-size: 13px; font-weight: bold; }
+.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: bold; color: var(--text); }
+.wf-header-section { border-top: 2px solid var(--border); margin-top: 4px; }
 .btn-add { background: #533483; color: #fff; border: none; border-radius: 4px; width: 24px; height: 24px; font-size: 16px; line-height: 1; cursor: pointer; }
-.category { border-bottom: 1px solid #0f3460; }
-.cat-header { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 12px; color: #aaa; cursor: pointer; user-select: none; }
-.cat-header:hover { background: #1e2d50; }
+.category { border-bottom: 1px solid var(--border); }
+.cat-header { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; }
+.cat-header:hover { background: var(--surface); }
 .cat-scripts { padding: 2px 0; }
-.script-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; font-size: 13px; cursor: pointer; }
-.script-item:hover { background: #1e2d50; }
-.script-item.active { background: #0f3460; color: #7eb8f7; }
+.script-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; font-size: 13px; cursor: pointer; color: var(--text); }
+.script-item:hover { background: var(--surface); }
+.script-item.active { background: var(--accent); color: #fff; }
 .script-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .spinner { animation: spin 1s linear infinite; display: inline-block; color: #4caf50; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.sidebar-footer { margin-top: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #0f3460; }
-.env-section { display: flex; flex-direction: column; gap: 4px; }
-.env-label { font-size: 11px; color: #888; }
-.env-row { display: flex; gap: 4px; }
-.env-row input { flex: 1; padding: 3px 6px; background: #1a1a2e; border: 1px solid #444; color: #e0e0e0; border-radius: 3px; font-size: 11px; min-width: 0; }
-.env-row button { padding: 3px 6px; background: #3a3a3a; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 11px; flex-shrink: 0; }
-.btn-env-save { padding: 4px; background: #533483; color: #fff; border: none; border-radius: 3px; font-size: 11px; width: 100%; }
-.btn-schedule { width: 100%; padding: 8px; background: #0f3460; color: #e0e0e0; border: 1px solid #533483; border-radius: 4px; font-size: 13px; }
-.btn-schedule:hover { background: #1e2d50; }
+.sidebar-footer { margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--border); }
+.footer-row { display: flex; gap: 6px; }
+.btn-footer { flex: 1; padding: 7px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
+.btn-footer:hover { background: var(--surface2); }
+.btn-settings { flex: 0 0 36px; color: var(--text-muted); }
 </style>

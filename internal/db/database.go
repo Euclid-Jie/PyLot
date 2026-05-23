@@ -69,6 +69,20 @@ func createTables() error {
 		pid INTEGER,
 		started_at DATETIME
 	);
+	CREATE TABLE IF NOT EXISTS workflows (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL,
+		graph TEXT NOT NULL DEFAULT '{}',
+		created_at DATETIME,
+		updated_at DATETIME
+	);
+	CREATE TABLE IF NOT EXISTS workflow_runs (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workflow_id INTEGER,
+		status TEXT,
+		started_at DATETIME,
+		ended_at DATETIME
+	);
 	`)
 	return err
 }

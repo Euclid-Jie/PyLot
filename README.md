@@ -1,19 +1,41 @@
-# README
+# PyLot
 
-## About
+Python 脚本调度桌面管理系统，适合需要定期运行多个 Python 脚本的场景。
 
-This is the official Wails Vue template.
+## 功能
 
-You can configure the project by editing `wails.json`. More information about the project settings can be found
-here: https://wails.io/docs/reference/project-config
+- 按分类管理 Python 脚本（爬取上传 / 数据处理 / 个人工具）
+- 支持 script 和 module 两种启动模式，自动识别虚拟环境解释器
+- 实时日志输出，支持中文（GBK 自动解码）
+- cron 定时调度，支持每日/每周规则，脚本和工作流均可设置
+- 全局 .env + 脚本私有环境变量双层合并
+- 卡死超时检测与强杀
+- **Workflow**：拖拽编排多脚本依赖关系，支持并发执行和错误终止
+- 关闭窗口最小化到系统托盘（右键菜单：定时任务 / 退出）
+- 深色/浅色主题切换，字体可选，窗口大小记忆
 
-## Live Development
+## 技术栈
 
-To run in live development mode, run `wails dev` in the project directory. This will run a Vite development
-server that will provide very fast hot reload of your frontend changes. If you want to develop in a browser
-and have access to your Go methods, there is also a dev server that runs on http://localhost:34115. Connect
-to this in your browser, and you can call your Go code from devtools.
+Go + [Wails v2](https://wails.io) + Vue3 + SQLite（纯 Go 驱动，无需 GCC）
 
-## Building
+## 开发
 
-To build a redistributable, production mode package, use `wails build`.
+```bash
+# 安装依赖
+go mod download
+cd frontend && npm install && cd ..
+
+# 开发模式（热重载）
+wails dev
+
+# 打包
+wails build -platform windows/amd64 -ldflags "-H windowsgui"
+```
+
+详细环境搭建见 [CLAUDE.md](./CLAUDE.md)。
+
+## 要求
+
+- Windows 10/11
+- WebView2（系统自带）
+- Python 解释器路径在 UI 中配置
