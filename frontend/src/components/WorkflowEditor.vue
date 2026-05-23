@@ -100,6 +100,15 @@ watch(() => store.selectedWorkflowId, async (id) => {
   }
 })
 
+watch(() => store.newWorkflowTick, async () => {
+  workflows.value = await GetWorkflows() || []
+  selectedWfId.value = ''
+  wfName.value = '新工作流'
+  nodes.value = []
+  edges.value = []
+  running.value = false
+})
+
 onUnmounted(() => {
   EventsOff('workflow:node-status')
   EventsOff('workflow:status')

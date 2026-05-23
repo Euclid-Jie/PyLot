@@ -97,7 +97,7 @@ const form = ref({
 })
 const envPairs = ref([])
 
-const isNew = computed(() => store.selectedScriptID === -1)
+const isNew = computed(() => store.selectedScriptID === 0)
 const isRunning = computed(() => store.runningScripts.has(store.selectedScriptID))
 
 onMounted(loadScript)
@@ -192,36 +192,43 @@ async function browseDir() {
 </script>
 
 <style scoped>
-.script-config { padding: 8px; }
-.config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.config-header h2 { font-size: 15px; font-weight: 600; color: var(--text); }
-.header-actions { display: flex; gap: 6px; align-items: center; }
-.badge-running { background: #1b5e20; color: #4caf50; padding: 3px 10px; border-radius: 12px; font-size: 12px; }
-.btn-run  { background: #2e7d32; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 13px; }
-.btn-stop { background: #c62828; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 13px; }
-.btn-save { background: var(--accent); color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 13px; }
-.btn-copy { background: #6a1b9a; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 13px; }
-.btn-timer { background: #e65100; color: #fff; border: none; padding: 5px 12px; border-radius: 4px; font-size: 13px; }
-.btn-delete { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); padding: 5px 12px; border-radius: 4px; font-size: 13px; }
+.script-config { padding: 0; }
+.config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.config-header h2 { font-size: 20px; font-weight: 600; color: var(--text); }
+.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.badge-running { background: var(--green-dim); color: var(--green); padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; border: 1px solid rgba(63,185,80,.3); }
+.btn-run, .btn-stop, .btn-save, .btn-copy, .btn-timer, .btn-delete { padding: 5px 14px; border-radius: var(--radius); font-size: 14px; font-weight: 500; transition: background .12s, opacity .12s; }
+.btn-run   { background: var(--green-dim);  color: var(--green);  border: 1px solid rgba(63,185,80,.4); }
+.btn-stop  { background: var(--red-dim);    color: var(--red);    border: 1px solid rgba(248,81,73,.4); }
+.btn-save  { background: var(--accent);     color: #fff;          border: 1px solid var(--accent); }
+.btn-copy  { background: var(--surface2);   color: var(--text-dim); border: 1px solid var(--border); }
+.btn-timer { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(210,153,34,.4); }
+.btn-delete{ background: transparent;       color: var(--text-muted); border: 1px solid var(--border); }
+.btn-save:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.btn-run:hover, .btn-stop:hover, .btn-copy:hover, .btn-timer:hover, .btn-delete:hover { opacity: .8; }
 .form-body { border: none; }
-.form-row { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
-.form-row > label:first-child { width: 76px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; }
-.label-inline { font-size: 12px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; }
-.form-row input, .form-row select { flex: 1; padding: 5px 8px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 13px; }
-.form-row input:focus, .form-row select:focus { border-color: var(--accent); outline: none; }
-.form-row > button { padding: 4px 10px; background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; flex-shrink: 0; }
-.mode-toggle { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-.mode-btn { padding: 4px 16px; background: var(--input-bg); color: var(--text-muted); border: none; font-size: 12px; cursor: pointer; transition: background .15s; }
+.form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.form-row > label:first-child { width: 80px; font-size: 14px; color: var(--text-dim); flex-shrink: 0; text-align: right; }
+.label-inline { font-size: 14px; color: var(--text-dim); flex-shrink: 0; white-space: nowrap; }
+.form-row input, .form-row select { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s, box-shadow .12s; }
+.form-row input:focus, .form-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.form-row > button { padding: 6px 12px; background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; flex-shrink: 0; transition: background .12s, color .12s; }
+.form-row > button:hover { background: var(--surface); color: var(--text); border-color: var(--text-muted); }
+.mode-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.mode-btn { padding: 6px 20px; background: transparent; color: var(--text-muted); border: none; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .12s, color .12s; }
 .mode-btn.active { background: var(--accent); color: #fff; }
-.form-section { margin-top: 16px; }
-.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.section-header span { font-size: 12px; color: var(--text-muted); }
-.btn-add-env { padding: 3px 10px; background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; }
-.env-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
-.env-row input { flex: 1; padding: 4px 8px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 12px; }
-.env-eq { color: var(--text-muted); font-size: 13px; flex-shrink: 0; }
-.btn-rm { padding: 3px 7px; background: none; color: var(--text-muted); border: none; font-size: 13px; }
-.btn-rm:hover { color: #e74c3c; }
-fieldset:disabled { opacity: 0.5; pointer-events: none; }
-.toast { position: fixed; bottom: 320px; left: 50%; transform: translateX(-50%); background: #2e7d32; color: #fff; padding: 7px 20px; border-radius: 20px; font-size: 13px; z-index: 200; pointer-events: none; }
+.mode-btn:not(.active):hover { background: var(--surface2); color: var(--text); }
+.form-section { margin-top: 20px; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.section-header span { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+.btn-add-env { padding: 4px 10px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; transition: background .12s, color .12s; }
+.btn-add-env:hover { background: var(--surface2); color: var(--text); }
+.env-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.env-row input { flex: 1; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; }
+.env-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.env-eq { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+.btn-rm { padding: 4px 8px; background: none; color: var(--text-muted); border: none; font-size: 14px; transition: color .12s; }
+.btn-rm:hover { color: var(--red); }
+fieldset:disabled { opacity: 0.4; pointer-events: none; }
+.toast { position: fixed; bottom: 280px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; z-index: 200; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
 </style>

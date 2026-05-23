@@ -72,18 +72,24 @@ async function saveEnv() {
 </script>
 
 <style scoped>
-.settings-page { padding: 8px; max-width: 560px; }
-h2 { font-size: 15px; font-weight: 600; margin-bottom: 20px; color: var(--text); }
-.section { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-.section-title { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px; }
-.setting-row { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
-.setting-row label { width: 110px; font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
-.toggle-group { display: flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-.toggle-group button { padding: 5px 16px; background: none; border: none; color: var(--text-muted); font-size: 13px; }
+.settings-page { padding: 0; max-width: 540px; }
+h2 { font-size: 20px; font-weight: 600; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); color: var(--text); }
+.section { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; }
+.section-title { font-size: 12px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 16px; }
+.setting-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.setting-row:last-child { margin-bottom: 0; }
+.setting-row label { width: 110px; font-size: 14px; color: var(--text-dim); flex-shrink: 0; }
+.toggle-group { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.toggle-group button { padding: 6px 18px; background: transparent; border: none; color: var(--text-muted); font-size: 14px; font-weight: 500; transition: background .12s, color .12s; }
 .toggle-group button.active { background: var(--accent); color: #fff; }
-select { padding: 5px 8px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 13px; }
-.path-row { display: flex; gap: 6px; flex: 1; }
-.path-row input { flex: 1; padding: 5px 8px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: 4px; font-size: 13px; }
-.path-row button { padding: 5px 10px; background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); border-radius: 4px; font-size: 12px; }
-.btn-save { padding: 6px 16px; background: var(--accent); color: #fff; border: none; border-radius: 4px; font-size: 13px; margin-top: 4px; }
+.toggle-group button:hover:not(.active) { background: var(--surface2); color: var(--text); }
+select { padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s; }
+select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.path-row { display: flex; gap: 8px; flex: 1; }
+.path-row input { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s; }
+.path-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.path-row button { padding: 6px 12px; background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-weight: 500; transition: background .12s, color .12s; }
+.path-row button:hover { background: var(--surface); color: var(--text); border-color: var(--text-muted); }
+.btn-save { padding: 6px 18px; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: var(--radius); font-size: 14px; font-weight: 500; margin-top: 6px; transition: background .12s; }
+.btn-save:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
 </style>

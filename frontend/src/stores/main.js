@@ -10,6 +10,7 @@ export const useMainStore = defineStore('main', () => {
   const scriptListVersion = ref(0)
   const selectedScriptWorkDir = ref('')
   const selectedWorkflowId = ref(null)
+  const newWorkflowTick = ref(0)
 
   function setScript(id) {
     selectedScriptID.value = id
@@ -35,6 +36,7 @@ export const useMainStore = defineStore('main', () => {
 
   function setView(view) { currentView.value = view }
   function openWorkflow(id) { selectedWorkflowId.value = id; currentView.value = 'workflow' }
+  function newWorkflow() { selectedWorkflowId.value = null; newWorkflowTick.value++; currentView.value = 'workflow' }
   function addLog(entry) { currentLogs.value.push(entry) }
   function clearLogs() { currentLogs.value = [] }
   function setRunning(scriptID, running) {
@@ -43,5 +45,5 @@ export const useMainStore = defineStore('main', () => {
   }
   function refreshScriptList() { scriptListVersion.value++ }
 
-  return { selectedScriptID, currentView, runningScripts, currentLogs, scriptListVersion, selectedScriptWorkDir, selectedWorkflowId, setScript, setScriptFromWorkflow, setView, openWorkflow, addLog, clearLogs, setRunning, refreshScriptList }
+  return { selectedScriptID, currentView, runningScripts, currentLogs, scriptListVersion, selectedScriptWorkDir, selectedWorkflowId, newWorkflowTick, setScript, setScriptFromWorkflow, setView, openWorkflow, newWorkflow, addLog, clearLogs, setRunning, refreshScriptList }
 })

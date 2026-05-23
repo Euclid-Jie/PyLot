@@ -91,33 +91,69 @@ function scriptsByCategory(cat) {
 }
 
 function newScript() {
-  store.setScript(-1)
+  store.setScript(0)
 }
 
 function newWorkflow() {
-  store.selectedWorkflowId = null
-  store.setView('workflow')
+  store.newWorkflow()
 }
 </script>
 
 <style scoped>
 .sidebar-inner { display: flex; flex-direction: column; height: 100%; }
-.sidebar-header { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-bottom: 1px solid var(--border); font-size: 13px; font-weight: bold; color: var(--text); }
-.wf-header-section { border-top: 2px solid var(--border); margin-top: 4px; }
-.btn-add { background: #533483; color: #fff; border: none; border-radius: 4px; width: 24px; height: 24px; font-size: 16px; line-height: 1; cursor: pointer; }
-.category { border-bottom: 1px solid var(--border); }
-.cat-header { display: flex; justify-content: space-between; padding: 8px 12px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; }
-.cat-header:hover { background: var(--surface); }
-.cat-scripts { padding: 2px 0; }
-.script-item { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; font-size: 13px; cursor: pointer; color: var(--text); }
-.script-item:hover { background: var(--surface); }
-.script-item.active { background: var(--accent); color: #fff; }
-.script-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.spinner { animation: spin 1s linear infinite; display: inline-block; color: #4caf50; }
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-.sidebar-footer { margin-top: auto; padding: 10px 12px; border-top: 1px solid var(--border); }
+
+.sidebar-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 16px 8px;
+  font-size: 12px; font-weight: 600; color: var(--text-muted);
+  letter-spacing: .04em; text-transform: uppercase;
+}
+.wf-header-section { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 16px; }
+
+.btn-add {
+  width: 22px; height: 22px; border-radius: var(--radius-sm); border: none;
+  background: transparent; color: var(--text-muted);
+  font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
+  transition: background .12s, color .12s;
+}
+.btn-add:hover { background: var(--surface2); color: var(--text); }
+
+.cat-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 16px; font-size: 12px; color: var(--text-muted);
+  cursor: pointer; user-select: none; transition: color .12s;
+}
+.cat-header:hover { color: var(--text-dim); }
+
+.cat-scripts { padding: 2px 0 6px; }
+
+.script-item {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 7px 16px 7px 20px;
+  font-size: 14px; cursor: pointer; color: var(--text-dim);
+  border-left: 2px solid transparent;
+  transition: background .1s, color .1s, border-color .1s;
+  white-space: nowrap;
+}
+.script-item:hover { background: var(--surface); color: var(--text); }
+.script-item.active {
+  background: var(--accent-dim); color: var(--accent);
+  border-left-color: var(--accent); font-weight: 500;
+}
+
+.script-name { overflow: hidden; text-overflow: ellipsis; }
+.spinner { animation: spin 1s linear infinite; display: inline-block; color: var(--green); font-size: 13px; flex-shrink: 0; margin-left: 4px; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.sidebar-footer { margin-top: auto; padding: 12px; border-top: 1px solid var(--border); }
 .footer-row { display: flex; gap: 6px; }
-.btn-footer { flex: 1; padding: 7px; background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
-.btn-footer:hover { background: var(--surface2); }
-.btn-settings { flex: 0 0 36px; color: var(--text-muted); }
+.btn-footer {
+  flex: 1; padding: 7px 8px;
+  background: transparent; color: var(--text-dim);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  font-size: 13px; font-weight: 500;
+  transition: background .12s, color .12s, border-color .12s;
+}
+.btn-footer:hover { background: var(--surface2); color: var(--text); border-color: var(--text-muted); }
+.btn-settings { flex: 0 0 36px; }
 </style>

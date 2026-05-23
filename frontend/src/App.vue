@@ -64,32 +64,92 @@ onMounted(async () => {
 </script>
 
 <style>
-/* CSS variable themes */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
 :root, [data-theme="dark"] {
-  --bg: #1a1a2e; --sidebar-bg: #16213e; --border: #0f3460;
-  --surface: #1e2d50; --surface2: #2d2d2d; --input-bg: #252526;
-  --text: #e0e0e0; --text-muted: #888; --accent: #1565c0;
-  --font: system-ui, sans-serif;
+  --bg: #0d1117;
+  --sidebar-bg: #161b22;
+  --border: #30363d;
+  --surface: #21262d;
+  --surface2: #30363d;
+  --input-bg: #0d1117;
+  --text: #e6edf3;
+  --text-muted: #6e7681;
+  --text-dim: #8b949e;
+  --accent: #2f81f7;
+  --accent-dim: rgba(47,129,247,.15);
+  --accent-hover: #388bfd;
+  --green: #3fb950;
+  --green-dim: rgba(63,185,80,.15);
+  --red: #f85149;
+  --red-dim: rgba(248,81,73,.15);
+  --orange: #d29922;
+  --orange-dim: rgba(210,153,34,.15);
+  --purple: #bc8cff;
+  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --radius: 6px;
+  --radius-sm: 4px;
 }
 [data-theme="light"] {
-  --bg: #f5f5f5; --sidebar-bg: #ffffff; --border: #d0d0d0;
-  --surface: #ffffff; --surface2: #f0f0f0; --input-bg: #fafafa;
-  --text: #1a1a1a; --text-muted: #666; --accent: #1565c0;
+  --bg: #ffffff;
+  --sidebar-bg: #f6f8fa;
+  --border: #d0d7de;
+  --surface: #ffffff;
+  --surface2: #f6f8fa;
+  --input-bg: #ffffff;
+  --text: #1f2328;
+  --text-muted: #9198a1;
+  --text-dim: #656d76;
+  --accent: #0969da;
+  --accent-dim: rgba(9,105,218,.1);
+  --accent-hover: #0860ca;
+  --green: #1a7f37;
+  --green-dim: rgba(26,127,55,.1);
+  --red: #cf222e;
+  --red-dim: rgba(207,34,46,.1);
+  --orange: #9a6700;
+  --orange-dim: rgba(154,103,0,.1);
+  --purple: #8250df;
 }
+
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: var(--font); background: var(--bg); color: var(--text); height: 100vh; overflow: hidden; }
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
 .app-layout { display: flex; height: 100vh; }
-.sidebar { width: 200px; min-width: 200px; background: var(--sidebar-bg); border-right: 1px solid var(--border); overflow-y: auto; display: flex; flex-direction: column; }
+.sidebar {
+  width: 220px; min-width: 220px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  overflow-y: auto; display: flex; flex-direction: column;
+}
 .main-area { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.content-area { flex: 1; overflow-y: auto; padding: 16px; }
+.content-area { flex: 1; overflow-y: auto; padding: 24px 28px; }
 .content-area.no-pad { padding: 0; overflow: hidden; }
-.log-footer { height: 280px; flex-shrink: 0; border-top: 1px solid var(--border); }
-.empty-hint { color: var(--text-muted); text-align: center; margin-top: 80px; font-size: 14px; }
-.alert-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 999; }
-.alert-box { background: var(--sidebar-bg); border: 1px solid #e74c3c; padding: 24px; border-radius: 8px; min-width: 300px; }
-.alert-box strong { color: #e74c3c; font-size: 16px; }
-.alert-box p { margin: 10px 0 16px; color: var(--text-muted); font-size: 14px; }
-.alert-box button { padding: 6px 16px; background: #e74c3c; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-button { cursor: pointer; }
-input, select, textarea { outline: none; }
+.log-footer { height: 260px; flex-shrink: 0; border-top: 1px solid var(--border); }
+.empty-hint {
+  color: var(--text-muted); text-align: center; margin-top: 120px;
+  font-size: 14px;
+}
+.alert-overlay { position: fixed; inset: 0; background: rgba(1,4,9,.8); display: flex; align-items: center; justify-content: center; z-index: 999; }
+.alert-box {
+  background: var(--sidebar-bg); border: 1px solid var(--red);
+  padding: 24px; border-radius: var(--radius); min-width: 320px;
+  box-shadow: 0 8px 24px rgba(1,4,9,.5);
+}
+.alert-box strong { color: var(--red); font-size: 15px; font-weight: 600; }
+.alert-box p { margin: 10px 0 16px; color: var(--text-dim); font-size: 14px; }
+.alert-box button {
+  padding: 5px 16px; background: var(--red); color: #fff;
+  border: none; border-radius: var(--radius); cursor: pointer; font-size: 14px; font-weight: 500;
+}
+button { cursor: pointer; font-family: var(--font); }
+input, select, textarea { outline: none; font-family: var(--font); }
 </style>

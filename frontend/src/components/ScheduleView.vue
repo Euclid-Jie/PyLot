@@ -69,21 +69,22 @@ async function del(id) {
 </script>
 
 <style scoped>
-.schedule-view { padding: 4px; }
-h2 { margin-bottom: 16px; font-size: 16px; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-th { text-align: center; padding: 8px 12px; background: var(--surface); color: var(--text-muted); font-weight: normal; }
-th:first-child { text-align: left; }
-td { padding: 8px 12px; border-bottom: 1px solid var(--border); text-align: center; vertical-align: middle; }
-td:first-child { text-align: left; }
-.name-cell { display: flex; align-items: center; gap: 8px; }
-.type-dot { width: 3px; height: 18px; border-radius: 2px; flex-shrink: 0; }
+.schedule-view { padding: 0; }
+h2 { font-size: 20px; font-weight: 600; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th { text-align: left; padding: 8px 14px; font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+td { padding: 11px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; color: var(--text-dim); }
+td:first-child { color: var(--text); }
+.name-cell { display: flex; align-items: center; gap: 10px; }
+.type-dot { width: 2px; height: 18px; border-radius: 2px; flex-shrink: 0; }
 .type-dot.sc { background: var(--accent); }
-.type-dot.wf { background: #e65100; }
-code { background: #252526; padding: 2px 6px; border-radius: 3px; color: #4caf50; }
-.btn-toggle { padding: 3px 12px; border-radius: 12px; border: none; font-size: 12px; cursor: pointer; font-weight: 500; }
-.btn-toggle.on  { background: #e65100; color: #fff; }
+.type-dot.wf { background: var(--orange); }
+code { background: var(--surface); padding: 3px 8px; border-radius: var(--radius-sm); color: var(--green); font-size: 13px; border: 1px solid var(--border); font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; }
+.btn-toggle { padding: 4px 14px; border-radius: 20px; font-size: 13px; font-weight: 500; cursor: pointer; transition: opacity .12s; }
+.btn-toggle.on  { background: var(--orange-dim); color: var(--orange); border: 1px solid rgba(210,153,34,.4); }
 .btn-toggle.off { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
-.btn-del { background: #3a3a3a; color: #e74c3c; border: 1px solid #555; padding: 3px 10px; border-radius: 4px; font-size: 12px; }
-.empty { color: #666; text-align: center; margin-top: 60px; font-size: 14px; }
+.btn-toggle:hover { opacity: .8; }
+.btn-del { background: transparent; color: var(--text-muted); border: 1px solid var(--border); padding: 4px 12px; border-radius: var(--radius); font-size: 13px; transition: color .12s, border-color .12s; }
+.btn-del:hover { color: var(--red); border-color: var(--red); }
+.empty { color: var(--text-muted); text-align: center; margin-top: 80px; font-size: 14px; }
 </style>

@@ -366,6 +366,15 @@ func (a *App) GetScheduleOverview() []scheduler.ScheduleInfo {
 		name := ""
 		if s != nil {
 			name = s.Name
+		} else if scriptID < 0 {
+			wfID := -scriptID
+			var wfName string
+			db.DB.QueryRow(`SELECT name FROM workflows WHERE id=?`, wfID).Scan(&wfName)
+			if wfName != "" {
+				name = wfName
+			} else {
+				name = "工作流"
+			}
 		}
 		info := scheduler.ScheduleInfo{
 			ScheduleID: schedID,

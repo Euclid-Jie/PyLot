@@ -46,15 +46,16 @@ async function openVSCode() {
 </script>
 
 <style scoped>
-.log-panel { display: flex; flex-direction: column; height: 100%; background: #1e1e1e; }
-.log-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 4px 12px; background: #252526; border-bottom: 1px solid #333; flex-shrink: 0; }
-.log-title { font-size: 12px; color: #aaa; }
+.log-panel { display: flex; flex-direction: column; height: 100%; background: var(--bg); }
+.log-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 6px 16px; background: var(--sidebar-bg); border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.log-title { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
 .log-actions { display: flex; gap: 6px; }
-.log-actions button { padding: 2px 8px; background: #3a3a3a; color: #ccc; border: 1px solid #555; border-radius: 3px; font-size: 12px; }
-.btn-vscode { display: flex; align-items: center; justify-content: center; width: 24px; padding: 2px 4px !important; color: #007acc !important; }
-.btn-vscode:disabled { opacity: 0.3; cursor: default; }
-.log-body { flex: 1; overflow-y: auto; padding: 6px 12px; font-family: monospace; font-size: 12px; }
-.log-line { line-height: 1.6; white-space: pre-wrap; word-break: break-all; color: #d4d4d4; text-align: left; display: block; }
-.log-line.error { color: #f44747; }
-.log-empty { color: #555; font-size: 12px; margin-top: 8px; }
+.log-actions button { padding: 4px 10px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-weight: 500; transition: background .12s, color .12s; }
+.log-actions button:hover { background: var(--surface2); color: var(--text); border-color: var(--text-muted); }
+.btn-vscode { display: flex; align-items: center; justify-content: center; width: 28px; padding: 4px !important; color: #4f9ef8 !important; }
+.btn-vscode:disabled { opacity: 0.25; cursor: default; }
+.log-body { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.7; }
+.log-line { white-space: pre-wrap; word-break: break-all; color: #c9d1d9; display: block; }
+.log-line.error { color: var(--red); }
+.log-empty { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
 </style>
