@@ -120,10 +120,12 @@ function newWorkflow() {
 
 .cat-header {
   display: flex; justify-content: space-between; align-items: center;
-  padding: 6px 16px; font-size: 12px; color: var(--text-muted);
-  cursor: pointer; user-select: none; transition: color .12s;
+  padding: 5px 16px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-muted); background: var(--surface2);
+  cursor: pointer; user-select: none; transition: background .12s, color .12s;
+  border-top: 1px solid var(--border);
 }
-.cat-header:hover { color: var(--text-dim); }
+.cat-header:hover { background: var(--surface); color: var(--text-dim); }
 
 .cat-scripts { padding: 2px 0 6px; }
 

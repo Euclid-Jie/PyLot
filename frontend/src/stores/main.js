@@ -22,6 +22,7 @@ export const useMainStore = defineStore('main', () => {
   async function setScriptFromWorkflow(id) {
     selectedScriptID.value = id
     currentView.value = 'script'
+    selectedWorkflowId.value = null
     selectedScriptWorkDir.value = ''
     const rec = await GetLatestLog(id)
     if (rec?.logOutput) {
@@ -35,7 +36,7 @@ export const useMainStore = defineStore('main', () => {
   }
 
   function setView(view) { currentView.value = view }
-  function openWorkflow(id) { selectedWorkflowId.value = id; currentView.value = 'workflow' }
+  function openWorkflow(id) { selectedWorkflowId.value = id; selectedScriptID.value = null; currentView.value = 'workflow' }
   function newWorkflow() { selectedWorkflowId.value = null; newWorkflowTick.value++; currentView.value = 'workflow' }
   function addLog(entry) { currentLogs.value.push(entry) }
   function clearLogs() { currentLogs.value = [] }

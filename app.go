@@ -429,19 +429,22 @@ func (a *App) DeleteWorkflow(id int) error {
 func (a *App) RunWorkflow(id int) error {
 	cfg := a.GetGlobalConfig()
 	go func() {
-		err := workflow.Run(a.ctx, id, cfg.EnvFilePath, func(runID int, nodeID string, scriptID int, status string) {
-			runtime.EventsEmit(a.ctx, "workflow:node-status", map[string]interface{}{
-				"runId":    runID,
-				"nodeId":   nodeID,
-				"scriptId": scriptID,
-				"status":   status,
-			})
-			// Also emit task:status so LogPanel spinner works
-			runtime.EventsEmit(a.ctx, "task:status", map[string]interface{}{
-				"scriptID": scriptID,
-				"status":   status,
-			})
-		})
+		err := workflow.Run(a.ctx, id, cfg.EnvFilePath,
+			func(runID int, nodeID string, scriptID int, status string) {
+				runtime.EventsEmit(a.ctx, "workflow:node-status", map[string]interface{}{
+					"runId": runID, "nodeId": nodeID, "scriptId": scriptID, "status": status,
+				})
+				runtime.EventsEmit(a.ctx, "task:status", map[string]interface{}{
+					"scriptID": scriptID, "status": status,
+				})
+			},
+			func(scriptID int, line string, isError bool) {
+				runtime.EventsEmit(a.ctx, "log:line", map[string]interface{}{
+					"scriptID": scriptID, "line": line, "isError": isError,
+					"timestamp": time.Now().Format("15:04:05"),
+				})
+			},
+		)
 		status := "success"
 		if err != nil {
 			status = "error"

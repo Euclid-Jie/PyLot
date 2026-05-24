@@ -1,5 +1,5 @@
 <template>
-  <div class="script-config">
+  <div class="script-config" @keydown.ctrl.s.prevent="handleSave">
     <div class="config-header">
       <h2>{{ isNew ? '新建脚本' : form.name || '脚本配置' }}</h2>
       <div class="header-actions">
@@ -14,7 +14,6 @@
     </div>
 
     <fieldset :disabled="isRunning" class="form-body">
-      <!-- 名称 + 分类 同行 -->
       <div class="form-row">
         <label>名称</label>
         <input v-model="form.name" style="flex:2" />
@@ -26,19 +25,20 @@
         </select>
       </div>
 
-      <!-- 启动模式：大按钮切换 -->
       <div class="form-row">
         <label>启动模式</label>
         <div class="mode-toggle">
           <button :class="['mode-btn', { active: form.launchMode === 'script' }]" @click="form.launchMode = 'script'">script</button>
           <button :class="['mode-btn', { active: form.launchMode === 'module' }]" @click="form.launchMode = 'module'">module</button>
         </div>
+        <span style="flex:1"></span>
+        <label class="label-inline">超时(s)</label>
+        <input type="number" v-model.number="form.timeoutSeconds" min="0" placeholder="0=∞" style="width:80px;flex:none" />
       </div>
 
       <div class="form-row">
         <label>解释器</label>
-        <input v-model="form.interpreterPath" />
-        <button @click="browse('interpreter')">浏览</button>
+        <input v-model="form.interpreterPath" /><button @click="browse('interpreter')">浏览</button>
       </div>
       <div class="form-row">
         <label>脚本路径</label>
@@ -51,12 +51,18 @@
         <button @click="browseDir">浏览</button>
       </div>
 
-      <!-- 固定参数 + 超时 同行 -->
-      <div class="form-row">
-        <label>固定参数</label>
-        <input v-model="form.fixedArgs" placeholder="--env prod --debug" style="flex:3" />
-        <label class="label-inline">超时(s)</label>
-        <input type="number" v-model.number="form.timeoutSeconds" min="0" placeholder="0=∞" style="width:72px;flex:none" />
+      <div class="form-section">
+        <div class="section-header">
+          <span>固定参数</span>
+          <button class="btn-add-env" @click="argPairs.push({ flag: '', val: '' })">+ 添加</button>
+        </div>
+        <div v-for="(arg, i) in argPairs" :key="'arg'+i" class="env-row">
+          <span class="arg-prefix">--</span>
+          <input v-model="arg.flag" placeholder="begin" style="flex:1" />
+          <span class="env-eq"> </span>
+          <input v-model="arg.val" placeholder="value" style="flex:2" />
+          <button class="btn-rm" @click="argPairs.splice(i, 1)">✕</button>
+        </div>
       </div>
 
       <div class="form-section">
@@ -74,7 +80,7 @@
     </fieldset>
   </div>
 
-  <TempArgsModal v-if="showTempArgs" :fixedArgs="form.fixedArgs" @run="doRun" @close="showTempArgs = false" />
+  <TempArgsModal v-if="showTempArgs" :fixedArgs="buildFixedArgs()" @run="doRun" @close="showTempArgs = false" />
   <TimerModal v-if="showTimer" :scriptId="form.id" @close="showTimer = false" />
   <div v-if="toast" class="toast">{{ toast }}</div>
 </template>
@@ -96,6 +102,7 @@ const form = ref({
   timeoutSeconds: 0, privateEnv: '{}'
 })
 const envPairs = ref([])
+const argPairs = ref([])  // { flag: string, val: string }
 
 const isNew = computed(() => store.selectedScriptID === 0)
 const isRunning = computed(() => store.runningScripts.has(store.selectedScriptID))
@@ -108,6 +115,7 @@ async function loadScript() {
   if (isNew.value) {
     form.value = { id: null, name: '', category: 'crawler', interpreterPath: 'python', workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '', timeoutSeconds: 0, privateEnv: '{}' }
     envPairs.value = []
+    argPairs.value = []
     return
   }
   const scripts = await GetScripts()
@@ -115,9 +123,23 @@ async function loadScript() {
   if (s) {
     form.value = { ...s }
     store.selectedScriptWorkDir = s.workDir || ''
+    // parse "-- flag val --flag2 val2" into [{flag, val}]
+    if (s.fixedArgs) {
+      const tokens = s.fixedArgs.match(/--(\S+)\s+([^-]\S*)/g) || []
+      argPairs.value = tokens.map(t => {
+        const m = t.match(/--(\S+)\s+(.+)/)
+        return m ? { flag: m[1], val: m[2] } : { flag: t.replace(/^--/, ''), val: '' }
+      })
+    } else {
+      argPairs.value = []
+    }
     try { const obj = JSON.parse(s.privateEnv || ''); envPairs.value = Object.entries(obj).map(([k, v]) => ({ key: k, val: v })) }
     catch { envPairs.value = [] }
   }
+}
+
+function buildFixedArgs() {
+  return argPairs.value.filter(a => a.flag).map(a => a.val ? `--${a.flag} ${a.val}` : `--${a.flag}`).join(' ')
 }
 
 function buildPrivateEnv() {
@@ -127,7 +149,7 @@ function buildPrivateEnv() {
 }
 
 async function handleSave() {
-  const data = { ...form.value, privateEnv: buildPrivateEnv() }
+  const data = { ...form.value, fixedArgs: buildFixedArgs(), privateEnv: buildPrivateEnv() }
   if (isNew.value) {
     const id = await CreateScript(data)
     store.setScript(id)
@@ -145,7 +167,7 @@ function showToast(msg) {
 }
 
 function handleRun() {
-  if (form.value.fixedArgs) showTempArgs.value = true
+  if (argPairs.value.some(a => a.flag)) showTempArgs.value = true
   else doRun('')
 }
 
@@ -167,7 +189,7 @@ async function handleDelete() {
 }
 
 async function handleCopy() {
-  const data = { ...form.value, id: null, name: form.value.name + ' (副本)', privateEnv: buildPrivateEnv() }
+  const data = { ...form.value, id: null, name: form.value.name + ' (副本)', fixedArgs: buildFixedArgs(), privateEnv: buildPrivateEnv() }
   const id = await CreateScript(data)
   store.setScript(id)
 }
@@ -227,6 +249,7 @@ async function browseDir() {
 .env-row input { flex: 1; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; }
 .env-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .env-eq { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
+.arg-prefix { color: var(--text-muted); font-size: 14px; flex-shrink: 0; font-family: monospace; }
 .btn-rm { padding: 4px 8px; background: none; color: var(--text-muted); border: none; font-size: 14px; transition: color .12s; }
 .btn-rm:hover { color: var(--red); }
 fieldset:disabled { opacity: 0.4; pointer-events: none; }

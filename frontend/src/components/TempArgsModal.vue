@@ -6,8 +6,8 @@
       <label>临时参数（将完全替换固定参数）：</label>
       <input v-model="tempArgs" placeholder="输入临时参数..." />
       <div class="modal-actions">
-        <button class="btn-primary" @click="$emit('run', tempArgs)">使用临时参数运行</button>
         <button class="btn-secondary" @click="$emit('run', '')">使用固定参数运行</button>
+        <button class="btn-primary" @click="$emit('run', tempArgs)">使用临时参数运行</button>
         <button class="btn-cancel" @click="$emit('close')">取消</button>
       </div>
     </div>

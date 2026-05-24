@@ -1,5 +1,5 @@
 <template>
-  <div class="wf-layout">
+  <div class="wf-layout" @keydown.ctrl.s.prevent="saveWorkflow">
     <!-- 左侧：仅脚本列表 -->
     <div class="wf-sidebar">
       <div class="wf-sidebar-title">脚本</div>
@@ -69,7 +69,7 @@ import TimerModal from './TimerModal.vue'
 import { statusLabel } from '../utils/status.js'
 
 const store = useMainStore()
-const { addEdges } = useVueFlow()
+const vueFlow = useVueFlow()
 
 const allScripts = ref([])
 const workflows = ref([])
@@ -133,7 +133,7 @@ function onDrop(e) {
 }
 
 function onConnect(params) {
-  addEdges([{ ...params, type: 'smoothstep' }])
+  vueFlow.addEdges([{ ...params, type: 'smoothstep' }])
 }
 
 function removeNode(id) {
@@ -142,9 +142,11 @@ function removeNode(id) {
 }
 
 function buildGraph() {
+  const ns = vueFlow.getNodes.value
+  const es = vueFlow.getEdges.value
   return JSON.stringify({
-    nodes: nodes.value.map(n => ({ id: n.id, scriptId: n.data.scriptId, x: n.position.x, y: n.position.y })),
-    edges: edges.value.map(e => ({ source: e.source, target: e.target })),
+    nodes: ns.map(n => ({ id: n.id, scriptId: n.data.scriptId, x: n.position.x, y: n.position.y })),
+    edges: es.map(e => ({ source: e.source, target: e.target })),
   })
 }
 

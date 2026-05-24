@@ -5,7 +5,14 @@
       "Bash(wails version *)",
       "Bash(cmd.exe *)",
       "Bash(powershell *)",
-      "Bash(go build *)"
+      "Bash(go build *)",
+      "Bash(sqlite3 *)",
+      "Bash(python3 *)",
+      "Bash(tasklist /FI \"PID eq 36384\")",
+      "Bash(tasklist /FI \"PID eq 43136\")",
+      "Bash(tasklist /FI \"PID eq 19256\")",
+      "Bash(~/go/bin/go build *)",
+      "Bash(\"/c/Program Files/Go/bin/go\" build ./...)"
     ]
   }
 }

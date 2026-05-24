@@ -54,8 +54,8 @@ async function openVSCode() {
 .log-actions button:hover { background: var(--surface2); color: var(--text); border-color: var(--text-muted); }
 .btn-vscode { display: flex; align-items: center; justify-content: center; width: 28px; padding: 4px !important; color: #4f9ef8 !important; }
 .btn-vscode:disabled { opacity: 0.25; cursor: default; }
-.log-body { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.7; }
-.log-line { white-space: pre-wrap; word-break: break-all; color: #c9d1d9; display: block; }
+.log-body { flex: 1; overflow-y: auto; padding: 10px 16px; font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace; font-size: 13px; line-height: 1.7; text-align: left; }
+.log-line { white-space: pre-wrap; word-break: break-all; color: #c9d1d9; display: block; text-align: left; }
 .log-line.error { color: var(--red); }
 .log-empty { color: var(--text-muted); font-size: 13px; margin-top: 10px; }
 </style>

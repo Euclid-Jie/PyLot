@@ -1,0 +1,5 @@
+{
+    "terminal.integrated.env.windows": {
+        "PATH": "C:\\Program Files\\Go\\bin;C:\\Users\\Ouwei\\go\\bin;${env:PATH}"
+    }
+}

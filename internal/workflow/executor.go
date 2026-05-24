@@ -30,9 +30,10 @@ type Graph struct {
 }
 
 type StatusCallback func(workflowRunID int, nodeID string, scriptID int, status string)
+type LogCallback func(scriptID int, line string, isError bool)
 
 // Run executes a workflow. onStatus is called on each node status change.
-func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus StatusCallback) error {
+func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus StatusCallback, onLog LogCallback) error {
 	var wf db.Workflow
 	row := db.DB.QueryRow(`SELECT id,name,graph FROM workflows WHERE id=?`, workflowID)
 	if err := row.Scan(&wf.ID, &wf.Name, &wf.Graph); err != nil {
@@ -101,7 +102,7 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 			wg.Add(1)
 			go func(nid string, n Node) {
 				defer wg.Done()
-				err := runNode(ctx, n, globalEnv, int(runID), nid, onStatus)
+				err := runNode(ctx, n, globalEnv, int(runID), nid, onStatus, onLog)
 				if err != nil {
 					layerMu.Lock()
 					layerFailed = true
@@ -139,7 +140,7 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 	return nil
 }
 
-func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int, nodeID string, onStatus StatusCallback) error {
+func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int, nodeID string, onStatus StatusCallback, onLog LogCallback) error {
 	s, err := script.GetByID(n.ScriptID)
 	if err != nil {
 		return err
@@ -167,7 +168,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	}
 
 	cbs := script.RunCallbacks{
-		OnLog: func(line string, isError bool) {},
+		OnLog: func(line string, isError bool) { onLog(n.ScriptID, line, isError) },
 		OnStatus: func(status string) {
 			onStatus(runID, nodeID, n.ScriptID, status)
 			if status != "running" {

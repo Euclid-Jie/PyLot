@@ -1,9 +1,10 @@
 package script
 
 import (
-	"bufio"
+	"bytes"
 	"database/sql"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 	"sync"
@@ -37,15 +38,44 @@ var (
 	mu          sync.Mutex
 )
 
+// lineWriter splits incoming bytes into lines and calls onLine for each.
+type lineWriter struct {
+	buf    bytes.Buffer
+	onLine func(string)
+}
+
+func (w *lineWriter) Write(p []byte) (int, error) {
+	w.buf.Write(p)
+	for {
+		b := w.buf.Bytes()
+		idx := bytes.IndexByte(b, '\n')
+		if idx < 0 {
+			break
+		}
+		line := string(b[:idx])
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+		w.onLine(line)
+		w.buf.Next(idx + 1)
+	}
+	return len(p), nil
+}
+
+func (w *lineWriter) Flush() {
+	if w.buf.Len() > 0 {
+		w.onLine(w.buf.String())
+		w.buf.Reset()
+	}
+}
+
 func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 	args := []string{}
 	scriptArg := task.ScriptPath
 	if task.LaunchMode == "module" {
 		args = append(args, "-m")
-		// strip .py extension and convert path separators to dots
 		scriptArg = strings.TrimSuffix(scriptArg, ".py")
 		scriptArg = strings.ReplaceAll(scriptArg, "\\", "/")
-		// use only the filename stem as module name (python -m runs from WorkDir)
 		if idx := strings.LastIndex(scriptArg, "/"); idx >= 0 {
 			scriptArg = scriptArg[idx+1:]
 		}
@@ -60,8 +90,24 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 	cmd.Env = task.Env
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
+	lastOutput := time.Now()
+	var logMu sync.Mutex
+
+	makeWriter := func(isErr bool) io.Writer {
+		gbkWriter := &lineWriter{onLine: func(line string) {
+			logMu.Lock()
+			lastOutput = time.Now()
+			logMu.Unlock()
+			cbs.OnLog(line, isErr)
+			db.DB.Exec(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`, line+"\n", recordID)
+		}}
+		return transform.NewWriter(gbkWriter, simplifiedchinese.GBK.NewDecoder())
+	}
+
+	stdoutW := makeWriter(false)
+	stderrW := makeWriter(true)
+	cmd.Stdout = stdoutW
+	cmd.Stderr = stderrW
 
 	if err := cmd.Start(); err != nil {
 		return err
@@ -73,24 +119,6 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 
 	db.DB.Exec(`INSERT OR REPLACE INTO running_tasks(script_id,pid,started_at) VALUES(?,?,?)`,
 		task.ScriptID, cmd.Process.Pid, time.Now())
-
-	lastOutput := time.Now()
-	var logMu sync.Mutex
-
-	readLines := func(scanner *bufio.Scanner, isErr bool) {
-		for scanner.Scan() {
-			line := scanner.Text()
-			logMu.Lock()
-			lastOutput = time.Now()
-			logMu.Unlock()
-			cbs.OnLog(line, isErr)
-			db.DB.Exec(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`,
-				line+"\n", recordID)
-		}
-	}
-
-	go readLines(bufio.NewScanner(transform.NewReader(stdout, simplifiedchinese.GBK.NewDecoder())), false)
-	go readLines(bufio.NewScanner(transform.NewReader(stderr, simplifiedchinese.GBK.NewDecoder())), true)
 
 	if task.TimeoutSecs > 0 {
 		go func() {
