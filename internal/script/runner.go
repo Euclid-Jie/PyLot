@@ -12,8 +12,6 @@ import (
 	"time"
 
 	"script-manager/internal/db"
-	"golang.org/x/text/encoding/simplifiedchinese"
-	"golang.org/x/text/transform"
 )
 
 type RunTask struct {
@@ -63,9 +61,24 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 }
 
 func (w *lineWriter) Flush() {
-	if w.buf.Len() > 0 {
-		w.onLine(w.buf.String())
-		w.buf.Reset()
+	if w.buf.Len() == 0 {
+		return
+	}
+	// Split buffered content by newlines and emit each line
+	content := w.buf.String()
+	w.buf.Reset()
+	lines := strings.Split(content, "\n")
+	for i, line := range lines {
+		if i == len(lines)-1 && line == "" {
+			// Last empty segment after final \n
+			continue
+		}
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+		if line != "" || i < len(lines)-1 {
+			w.onLine(line)
+		}
 	}
 }
 
@@ -74,11 +87,19 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 	scriptArg := task.ScriptPath
 	if task.LaunchMode == "module" {
 		args = append(args, "-m")
+		// Convert absolute script path to module name relative to WorkDir
 		scriptArg = strings.TrimSuffix(scriptArg, ".py")
+		workDir := strings.ReplaceAll(task.WorkDir, "\\", "/")
 		scriptArg = strings.ReplaceAll(scriptArg, "\\", "/")
-		if idx := strings.LastIndex(scriptArg, "/"); idx >= 0 {
-			scriptArg = scriptArg[idx+1:]
+		// Remove WorkDir prefix if present
+		if strings.HasPrefix(scriptArg, workDir+"/") {
+			scriptArg = strings.TrimPrefix(scriptArg, workDir+"/")
+		} else if strings.HasPrefix(scriptArg, workDir) {
+			scriptArg = strings.TrimPrefix(scriptArg, workDir)
+			scriptArg = strings.TrimPrefix(scriptArg, "/")
 		}
+		// Convert path separators to dots for module name
+		scriptArg = strings.ReplaceAll(scriptArg, "/", ".")
 	}
 	args = append(args, scriptArg)
 	if task.Args != "" {
@@ -87,21 +108,28 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 
 	cmd := exec.Command(task.InterpreterPath, args...)
 	cmd.Dir = task.WorkDir
-	cmd.Env = task.Env
+	cmd.Env = append(task.Env, "PYTHONIOENCODING=utf-8")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
 
 	lastOutput := time.Now()
 	var logMu sync.Mutex
 
+	var stdoutWriter, stderrWriter *lineWriter
 	makeWriter := func(isErr bool) io.Writer {
-		gbkWriter := &lineWriter{onLine: func(line string) {
+		lw := &lineWriter{onLine: func(line string) {
 			logMu.Lock()
 			lastOutput = time.Now()
 			logMu.Unlock()
 			cbs.OnLog(line, isErr)
 			db.DB.Exec(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`, line+"\n", recordID)
 		}}
-		return transform.NewWriter(gbkWriter, simplifiedchinese.GBK.NewDecoder())
+		if isErr {
+			stderrWriter = lw
+		} else {
+			stdoutWriter = lw
+		}
+		// Python outputs UTF-8 (via PYTHONIOENCODING=utf-8), no need for GBK decoder
+		return lw
 	}
 
 	stdoutW := makeWriter(false)
@@ -119,6 +147,31 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 
 	db.DB.Exec(`INSERT OR REPLACE INTO running_tasks(script_id,pid,started_at) VALUES(?,?,?)`,
 		task.ScriptID, cmd.Process.Pid, time.Now())
+
+	// Periodic flush to reduce log delay
+	go func() {
+		ticker := time.NewTicker(1 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				if stdoutWriter != nil {
+					stdoutWriter.Flush()
+				}
+				if stderrWriter != nil {
+					stderrWriter.Flush()
+				}
+			default:
+				mu.Lock()
+				_, still := runningCmds[task.ScriptID]
+				mu.Unlock()
+				if !still {
+					return
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+		}
+	}()
 
 	if task.TimeoutSecs > 0 {
 		go func() {
