@@ -12,6 +12,7 @@ import (
 
 	"script-manager/internal/db"
 	"script-manager/internal/env"
+	"script-manager/internal/notify"
 	"script-manager/internal/scheduler"
 	"script-manager/internal/script"
 	"script-manager/internal/workflow"
@@ -123,13 +124,14 @@ func (a *App) InferFromScriptPath(scriptPath string) ScriptInferResult {
 
 func (a *App) GetGlobalConfig() db.GlobalConfig {
 	var cfg db.GlobalConfig
-	db.DB.QueryRow(`SELECT id,env_file_path,updated_at FROM global_config WHERE id=1`).Scan(&cfg.ID, &cfg.EnvFilePath, &cfg.UpdatedAt)
+	db.DB.QueryRow(`SELECT id,env_file_path,COALESCE(lark_cli_path,''),COALESCE(lark_open_id,''),updated_at FROM global_config WHERE id=1`).
+		Scan(&cfg.ID, &cfg.EnvFilePath, &cfg.LarkCLIPath, &cfg.LarkOpenID, &cfg.UpdatedAt)
 	return cfg
 }
 
 func (a *App) SaveGlobalConfig(cfg db.GlobalConfig) error {
-	_, err := db.DB.Exec(`INSERT OR REPLACE INTO global_config(id,env_file_path,updated_at) VALUES(1,?,?)`,
-		cfg.EnvFilePath, time.Now())
+	_, err := db.DB.Exec(`INSERT OR REPLACE INTO global_config(id,env_file_path,lark_cli_path,lark_open_id,updated_at) VALUES(1,?,?,?,?)`,
+		cfg.EnvFilePath, cfg.LarkCLIPath, cfg.LarkOpenID, time.Now())
 	return err
 }
 
@@ -216,6 +218,10 @@ func (a *App) RunScript(scriptID int, tempArgs string) error {
 					"scriptName": s.Name,
 					"reason":     "Script exited with error",
 				})
+			}
+			if status != "running" {
+				go notify.Feishu(cfg.LarkCLIPath, cfg.LarkOpenID,
+					fmt.Sprintf("[PyLot] %s 执行%s", s.Name, notify.StatusLabel(status)))
 			}
 		},
 		OnTimeout: func() {
@@ -428,6 +434,8 @@ func (a *App) DeleteWorkflow(id int) error {
 
 func (a *App) RunWorkflow(id int) error {
 	cfg := a.GetGlobalConfig()
+	var wfName string
+	db.DB.QueryRow(`SELECT name FROM workflows WHERE id=?`, id).Scan(&wfName)
 	go func() {
 		err := workflow.Run(a.ctx, id, cfg.EnvFilePath,
 			func(runID int, nodeID string, scriptID int, status string) {
@@ -453,6 +461,8 @@ func (a *App) RunWorkflow(id int) error {
 			"workflowId": id,
 			"status":     status,
 		})
+		go notify.Feishu(cfg.LarkCLIPath, cfg.LarkOpenID,
+			fmt.Sprintf("[PyLot] 工作流「%s」执行%s", wfName, notify.StatusLabel(status)))
 	}()
 	return nil
 }

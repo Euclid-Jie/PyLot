@@ -32,7 +32,20 @@
           <button @click="browseEnv">浏览</button>
         </div>
       </div>
-      <button class="btn-save" @click="saveEnv">保存</button>
+      <button class="btn-save" @click="saveConfig">保存</button>
+    </div>
+
+    <div class="section">
+      <div class="section-title">飞书通知</div>
+      <div class="setting-row">
+        <label>lark-cli 路径</label>
+        <input class="full-input" v-model="larkCLI" placeholder="如 C:\...\lark-cli.cmd" />
+      </div>
+      <div class="setting-row">
+        <label>Open ID</label>
+        <input class="full-input" v-model="larkOpenID" placeholder="ou_xxxxxxxx" />
+      </div>
+      <button class="btn-save" @click="saveConfig">保存</button>
     </div>
   </div>
 </template>
@@ -42,12 +55,16 @@ import { ref, onMounted } from 'vue'
 import { GetGlobalConfig, SaveGlobalConfig, OpenFileDialog } from '../../wailsjs/go/main/App.js'
 
 const envPath = ref('')
+const larkCLI = ref('')
+const larkOpenID = ref('')
 const theme = ref(localStorage.getItem('theme') || 'dark')
 const font = ref(localStorage.getItem('font') || 'system-ui, sans-serif')
 
 onMounted(async () => {
   const cfg = await GetGlobalConfig()
   envPath.value = cfg.envFilePath || ''
+  larkCLI.value = cfg.larkCliPath || ''
+  larkOpenID.value = cfg.larkOpenId || ''
 })
 
 function setTheme(t) {
@@ -66,8 +83,8 @@ async function browseEnv() {
   if (p) envPath.value = p
 }
 
-async function saveEnv() {
-  await SaveGlobalConfig({ envFilePath: envPath.value })
+async function saveConfig() {
+  await SaveGlobalConfig({ envFilePath: envPath.value, larkCliPath: larkCLI.value, larkOpenId: larkOpenID.value })
 }
 </script>
 
@@ -92,4 +109,6 @@ select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-d
 .path-row button:hover { background: var(--surface); color: var(--text); border-color: var(--text-muted); }
 .btn-save { padding: 6px 18px; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: var(--radius); font-size: 14px; font-weight: 500; margin-top: 6px; transition: background .12s; }
 .btn-save:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.full-input { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s; }
+.full-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 </style>

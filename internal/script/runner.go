@@ -32,8 +32,9 @@ type RunCallbacks struct {
 }
 
 var (
-	runningCmds = map[int]*exec.Cmd{}
-	mu          sync.Mutex
+	runningCmds    = map[int]*exec.Cmd{}
+	mu             sync.Mutex
+	OnRunningChange func(count int)
 )
 
 // lineWriter splits incoming bytes into lines and calls onLine for each.
@@ -143,33 +144,27 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 
 	mu.Lock()
 	runningCmds[task.ScriptID] = cmd
+	count := len(runningCmds)
 	mu.Unlock()
+	if OnRunningChange != nil {
+		OnRunningChange(count)
+	}
 
 	db.DB.Exec(`INSERT OR REPLACE INTO running_tasks(script_id,pid,started_at) VALUES(?,?,?)`,
 		task.ScriptID, cmd.Process.Pid, time.Now())
 
 	// Periodic flush to reduce log delay
 	go func() {
-		ticker := time.NewTicker(1 * time.Second)
-		defer ticker.Stop()
 		for {
-			select {
-			case <-ticker.C:
-				if stdoutWriter != nil {
-					stdoutWriter.Flush()
-				}
-				if stderrWriter != nil {
-					stderrWriter.Flush()
-				}
-			default:
-				mu.Lock()
-				_, still := runningCmds[task.ScriptID]
-				mu.Unlock()
-				if !still {
-					return
-				}
-				time.Sleep(100 * time.Millisecond)
+			time.Sleep(500 * time.Millisecond)
+			mu.Lock()
+			_, still := runningCmds[task.ScriptID]
+			mu.Unlock()
+			if !still {
+				return
 			}
+			stdoutWriter.Flush()
+			stderrWriter.Flush()
 		}
 	}()
 
@@ -199,7 +194,11 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 		err := cmd.Wait()
 		mu.Lock()
 		delete(runningCmds, task.ScriptID)
+		count := len(runningCmds)
 		mu.Unlock()
+		if OnRunningChange != nil {
+			OnRunningChange(count)
+		}
 
 		db.DB.Exec(`DELETE FROM running_tasks WHERE script_id=?`, task.ScriptID)
 

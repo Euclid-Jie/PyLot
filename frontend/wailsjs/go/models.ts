@@ -3,6 +3,8 @@ export namespace db {
 	export class GlobalConfig {
 	    id: number;
 	    envFilePath: string;
+	    larkCliPath: string;
+	    larkOpenId: string;
 	    // Go type: time
 	    updatedAt: any;
 	
@@ -14,6 +16,8 @@ export namespace db {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.envFilePath = source["envFilePath"];
+	        this.larkCliPath = source["larkCliPath"];
+	        this.larkOpenId = source["larkOpenId"];
 	        this.updatedAt = this.convertValues(source["updatedAt"], null);
 	    }
 	

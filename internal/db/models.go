@@ -5,6 +5,8 @@ import "time"
 type GlobalConfig struct {
 	ID          int       `json:"id"`
 	EnvFilePath string    `json:"envFilePath"`
+	LarkCLIPath string    `json:"larkCliPath"`
+	LarkOpenID  string    `json:"larkOpenId"`
 	UpdatedAt   time.Time `json:"updatedAt"`
 }
 

@@ -22,6 +22,9 @@ func Init() error {
 	if err != nil {
 		return err
 	}
+	// WAL mode: concurrent readers+writers without BUSY errors; busy_timeout prevents silent failures
+	DB.Exec("PRAGMA journal_mode=WAL")
+	DB.Exec("PRAGMA busy_timeout=5000")
 	return createTables()
 }
 
@@ -84,6 +87,9 @@ func createTables() error {
 		ended_at DATETIME
 	);
 	`)
+	// Migrations: ignore errors if columns already exist
+	DB.Exec(`ALTER TABLE global_config ADD COLUMN lark_cli_path TEXT DEFAULT ''`)
+	DB.Exec(`ALTER TABLE global_config ADD COLUMN lark_open_id TEXT DEFAULT ''`)
 	return err
 }
 

@@ -48,10 +48,11 @@ cd frontend && npm install && cd ..
 
 ### 后端（Go）
 
-- `main.go` — Wails 启动 + systray 托盘（独立 goroutine）。关闭窗口触发 `OnBeforeClose` 隐藏到托盘；托盘右键菜单：显示主窗口 / 定时任务 / 退出（`os.Exit(0)`）。
+- `main.go` — Wails 启动 + systray 托盘（`goruntime.LockOSThread()` 保证消息泵稳定）。命名 Mutex 防多开；双托盘图标（`icon_free.ico` / `icon_busy.ico`）随运行状态切换；关闭窗口触发 `OnBeforeClose` 隐藏到托盘；托盘右键菜单：显示主窗口 / 定时任务 / 退出（`os.Exit(0)`）。
 - `app.go` — 所有暴露给前端的方法（Wails bind）。包含文件对话框、VSCode 打开、脚本推断、窗口大小读写、Workflow CRUD 等。
-- `internal/db/` — SQLite 初始化建表（7张表：scripts/schedules/run_records/running_tasks/global_config/workflows/workflow_runs）、日志清理（7天）。数据库文件在 exe 同目录。
-- `internal/script/runner.go` — 进程启动，stdout/stderr 用 GBK 解码，`SysProcAttr{HideWindow: true}` 隐藏黑框，支持卡死超时检测。
+- `internal/db/` — SQLite 初始化建表（7张表）+ WAL 模式（防并发写丢失）+ `busy_timeout=5000`；`global_config` 含 `lark_cli_path`/`lark_open_id` 字段；日志清理（7天）。数据库文件在 exe 同目录。
+- `internal/script/runner.go` — 进程启动，注入 `PYTHONIOENCODING=utf-8` 统一编码，`SysProcAttr{HideWindow: true}` 隐藏黑框，支持卡死超时检测；module 模式自动将绝对路径转换为相对 WorkDir 的点号模块名。
+- `internal/notify/feishu.go` — 调用 `lark-cli` 发飞书消息。`Feishu(cliPath, openID, text)` fire-and-forget；`StatusLabel(status)` 返回中文状态文字。脚本和工作流执行结束后均触发通知。
 - `internal/scheduler/` — robfig/cron v3 封装，管理定时任务注册/移除。`script_id < 0` 表示工作流定时任务（`-workflowId`）。
 - `internal/env/` — .env 文件解析，支持全局 env + 脚本私有 env 双层合并。
 - `internal/workflow/executor.go` — Kahn 拓扑排序 + 按层并发执行，任意节点失败则终止后续层。
@@ -63,7 +64,7 @@ cd frontend && npm install && cd ..
 - `ScriptConfig.vue` — 脚本配置表单。选择脚本路径后自动调用 `InferFromScriptPath` 推断虚拟环境解释器和工作目录。
 - `WorkflowEditor.vue` — 拖拽画布（Vue Flow）。左侧脚本列表可拖入，节点双击跳转脚本配置并加载最近日志。支持自动布局、复制、定时设置。
 - `ScheduleView.vue` — 定时任务总览，显示所有任务（含禁用）。脚本用蓝色竖线标识，工作流用橙色竖线标识。
-- `SettingsView.vue` — 设置页：主题（深色/浅色）、字体、全局 .env 路径。设置持久化到 `localStorage`。
+- `SettingsView.vue` — 设置页：主题（深色/浅色）、字体、全局 .env 路径、飞书通知（lark-cli 路径 + Open ID）。设置持久化到 `localStorage`（外观）或 DB（env/lark）。
 - `LogPanel.vue` — 实时日志，含 VSCode 图标按钮（调用 `OpenInVSCode(workDir)`）。
 
 ### Wails 事件
@@ -78,9 +79,13 @@ cd frontend && npm install && cd ..
 
 ## 关键约定
 
-- module 模式运行时，后端自动去掉 `.py` 后缀并取文件名作为模块名（从 WorkDir 运行）。
+- module 模式运行时，后端自动将绝对脚本路径转换为相对 WorkDir 的点号模块名（去 `.py` 后缀，路径分隔符换成 `.`）。
 - 所有子进程（Python 脚本、VSCode）均设置 `HideWindow: true` 避免黑框。
-- 托盘图标 `build/windows/icon.ico` 通过 `//go:embed` 内嵌进二进制。
+- Python 脚本注入 `PYTHONIOENCODING=utf-8`，统一 UTF-8 输出，无需 GBK 解码。
+- 托盘双图标：`build/windows/icon_free.ico`（空闲）/ `build/windows/icon_busy.ico`（有脚本运行），通过 `//go:embed` 内嵌，`script.OnRunningChange` 回调切换。
+- systray goroutine 必须 `goruntime.LockOSThread()`，否则休眠唤醒后消息泵失效。
+- SQLite 使用 WAL 模式 + `busy_timeout=5000`，防止并发日志写入与状态更新互相阻塞导致状态停在 running。
 - 工作流定时任务在 `schedules` 表中用负数 `script_id`（`-workflowId`）存储，`addScheduleJob` 统一处理正负数分发。
 - 窗口大小通过 `localStorage`（`winW`/`winH`）持久化，启动时通过 `SetWindowSize` 恢复。
 - 主题/字体通过 `localStorage`（`theme`/`font`）持久化，启动时设置 `data-theme` 属性和 `--font` CSS 变量。
+- 飞书通知配置（`lark_cli_path`/`lark_open_id`）存 `global_config` 表；`notify.Feishu` 参数为空时静默跳过，不影响正常运行。
