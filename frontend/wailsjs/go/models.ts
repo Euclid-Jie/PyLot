@@ -280,6 +280,58 @@ export namespace main {
 	        this.workDir = source["workDir"];
 	    }
 	}
+	export class ServiceInfo {
+	    id: number;
+	    name: string;
+	    command: string;
+	    work_dir: string;
+	    auto_start: boolean;
+	    running: boolean;
+	    status: string;
+	    pid: number;
+	    started_at: string;
+	    stopped_at: string;
+	    exit_code: number;
+	    last_error: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ServiceInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.command = source["command"];
+	        this.work_dir = source["work_dir"];
+	        this.auto_start = source["auto_start"];
+	        this.running = source["running"];
+	        this.status = source["status"];
+	        this.pid = source["pid"];
+	        this.started_at = source["started_at"];
+	        this.stopped_at = source["stopped_at"];
+	        this.exit_code = source["exit_code"];
+	        this.last_error = source["last_error"];
+	    }
+	}
+	export class ServiceLogEntry {
+	    id: number;
+	    line: string;
+	    isError: boolean;
+	    timestamp: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ServiceLogEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.line = source["line"];
+	        this.isError = source["isError"];
+	        this.timestamp = source["timestamp"];
+	    }
+	}
 
 }
 

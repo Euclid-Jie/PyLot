@@ -5,6 +5,7 @@
       <div class="content-area" :class="{ 'no-pad': store.currentView === 'workflow' }">
         <ScheduleView v-if="store.currentView === 'schedule'" />
         <SettingsView v-else-if="store.currentView === 'settings'" />
+        <ServicesView v-else-if="store.currentView === 'services'" />
         <WorkflowEditor v-else-if="store.currentView === 'workflow'" />
         <WorkflowRunPanel v-else-if="store.selectedScriptID !== null && store.selectedScriptID < 0" :key="store.selectedScriptID" />
         <ScriptConfig v-else-if="store.selectedScriptID !== null" :key="store.selectedScriptID" />
@@ -34,6 +35,7 @@ import ScheduleView from './components/ScheduleView.vue'
 import WorkflowEditor from './components/WorkflowEditor.vue'
 import WorkflowRunPanel from './components/WorkflowRunPanel.vue'
 import SettingsView from './components/SettingsView.vue'
+import ServicesView from './components/ServicesView.vue'
 
 const store = useMainStore()
 const alertData = ref(null)

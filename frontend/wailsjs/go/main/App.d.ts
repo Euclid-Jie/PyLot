@@ -4,6 +4,10 @@ import {db} from '../models';
 import {scheduler} from '../models';
 import {main} from '../models';
 
+export function AddService(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+
+export function ClearServiceLogs(arg1:number):Promise<void>;
+
 export function CopyWorkflow(arg1:number):Promise<number>;
 
 export function CreateScript(arg1:db.Script):Promise<number>;
@@ -11,6 +15,8 @@ export function CreateScript(arg1:db.Script):Promise<number>;
 export function DeleteSchedule(arg1:number):Promise<void>;
 
 export function DeleteScript(arg1:number):Promise<void>;
+
+export function DeleteService(arg1:number):Promise<void>;
 
 export function DeleteWorkflow(arg1:number):Promise<void>;
 
@@ -32,6 +38,8 @@ export function GetScripts():Promise<Array<db.Script>>;
 
 export function GetScriptsByCategory(arg1:string):Promise<Array<db.Script>>;
 
+export function GetServiceLogs(arg1:number):Promise<Array<main.ServiceLogEntry>>;
+
 export function GetWindowSize():Promise<number|number>;
 
 export function GetWorkflowRuns(arg1:number):Promise<Array<db.WorkflowRun>>;
@@ -40,11 +48,15 @@ export function GetWorkflows():Promise<Array<db.Workflow>>;
 
 export function InferFromScriptPath(arg1:string):Promise<main.ScriptInferResult>;
 
+export function ListServices():Promise<Array<main.ServiceInfo>>;
+
 export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string):Promise<string>;
 
 export function OpenInVSCode(arg1:string):Promise<void>;
+
+export function RestartService(arg1:number):Promise<void>;
 
 export function RunScript(arg1:number,arg2:string):Promise<void>;
 
@@ -56,10 +68,18 @@ export function SaveSchedule(arg1:db.Schedule):Promise<void>;
 
 export function SaveWorkflow(arg1:db.Workflow):Promise<number>;
 
+export function SetServiceAutoStart(arg1:number,arg2:boolean):Promise<void>;
+
 export function SetWindowSize(arg1:number,arg2:number):Promise<void>;
 
+export function StartService(arg1:number):Promise<void>;
+
 export function StopScript(arg1:number):Promise<void>;
+
+export function StopService(arg1:number):Promise<void>;
 
 export function ToggleSchedule(arg1:number,arg2:boolean):Promise<void>;
 
 export function UpdateScript(arg1:db.Script):Promise<void>;
+
+export function UpdateService(arg1:number,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<void>;

@@ -48,8 +48,9 @@
 
     <div class="sidebar-footer">
       <div class="footer-row">
-        <button class="btn-footer" @click="store.setView('schedule')">📅 Schedule</button>
-        <button class="btn-footer btn-settings" @click="store.setView('settings')">⚙️</button>
+        <button class="btn-footer" :class="{ active: store.currentView === 'services' }" @click="store.setView('services')">🖥 服务</button>
+        <button class="btn-footer" :class="{ active: store.currentView === 'schedule' }" @click="store.setView('schedule')">📅</button>
+        <button class="btn-footer btn-settings" :class="{ active: store.currentView === 'settings' }" @click="store.setView('settings')">⚙️</button>
       </div>
     </div>
   </div>
@@ -73,8 +74,6 @@ const categories = ref([
 onMounted(async () => {
   await loadScripts()
   allWorkflows.value = await GetWorkflows() || []
-  const cfg = await GetGlobalConfig()
-  envPath.value = cfg.envFilePath || ''
 })
 
 watch(() => store.scriptListVersion, async () => {
@@ -157,5 +156,6 @@ function newWorkflow() {
   transition: background .12s, color .12s, border-color .12s;
 }
 .btn-footer:hover { background: var(--surface2); color: var(--text); border-color: var(--text-muted); }
+.btn-footer.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
 .btn-settings { flex: 0 0 36px; }
 </style>

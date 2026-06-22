@@ -86,6 +86,14 @@ func createTables() error {
 		started_at DATETIME,
 		ended_at DATETIME
 	);
+	CREATE TABLE IF NOT EXISTS services (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		command TEXT NOT NULL,
+		work_dir TEXT NOT NULL DEFAULT '',
+		auto_start INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	`)
 	// Migrations: ignore errors if columns already exist
 	DB.Exec(`ALTER TABLE global_config ADD COLUMN lark_cli_path TEXT DEFAULT ''`)

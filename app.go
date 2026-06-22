@@ -15,6 +15,7 @@ import (
 	"script-manager/internal/notify"
 	"script-manager/internal/scheduler"
 	"script-manager/internal/script"
+	svc "script-manager/internal/service"
 	"script-manager/internal/workflow"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -38,6 +39,7 @@ func (a *App) startup(ctx context.Context) {
 	scheduler.Init()
 	a.loadSchedules()
 	scheduler.Start()
+	a.autoStartServices()
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -45,6 +47,7 @@ func (a *App) shutdown(ctx context.Context) {
 	for _, id := range script.GetRunningIDs() {
 		script.StopScript(id)
 	}
+	svc.StopAll()
 	db.DB.Close()
 }
 
@@ -490,4 +493,179 @@ func (a *App) CopyWorkflow(id int) (int, error) {
 	}
 	newID, _ := res.LastInsertId()
 	return int(newID), nil
+}
+
+// ========== Service Management ==========
+
+type ServiceInfo struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	Command   string `json:"command"`
+	WorkDir   string `json:"work_dir"`
+	AutoStart bool   `json:"auto_start"`
+	Running   bool   `json:"running"`
+	Status    string `json:"status"`
+	PID       int    `json:"pid"`
+	StartedAt string `json:"started_at"`
+	StoppedAt string `json:"stopped_at"`
+	ExitCode  int    `json:"exit_code"`
+	LastError string `json:"last_error"`
+}
+
+type ServiceLogEntry struct {
+	ID        int64  `json:"id"`
+	Line      string `json:"line"`
+	IsError   bool   `json:"isError"`
+	Timestamp string `json:"timestamp"`
+}
+
+func (a *App) autoStartServices() {
+	rows, err := db.DB.Query(`SELECT id FROM services WHERE auto_start=1`)
+	if err != nil {
+		return
+	}
+	defer rows.Close()
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		rows.Scan(&id)
+		ids = append(ids, id)
+	}
+	for _, id := range ids {
+		a.StartService(id)
+	}
+}
+
+func (a *App) ListServices() []ServiceInfo {
+	rows, err := db.DB.Query(`SELECT id,name,command,work_dir,auto_start FROM services ORDER BY id`)
+	if err != nil {
+		return []ServiceInfo{}
+	}
+	defer rows.Close()
+	list := []ServiceInfo{}
+	for rows.Next() {
+		var s ServiceInfo
+		var autoStart int
+		rows.Scan(&s.ID, &s.Name, &s.Command, &s.WorkDir, &autoStart)
+		s.AutoStart = autoStart == 1
+		a.applyServiceSnapshot(&s, svc.SnapshotFor(s.ID))
+		list = append(list, s)
+	}
+	return list
+}
+
+func (a *App) GetServiceLogs(id int64) []ServiceLogEntry {
+	logs := svc.Logs(id)
+	out := make([]ServiceLogEntry, 0, len(logs))
+	for _, l := range logs {
+		out = append(out, ServiceLogEntry{
+			ID:        l.ID,
+			Line:      l.Line,
+			IsError:   l.IsError,
+			Timestamp: l.Timestamp,
+		})
+	}
+	return out
+}
+
+func (a *App) ClearServiceLogs(id int64) {
+	svc.ClearLogs(id)
+}
+
+func (a *App) AddService(name, command, workDir string, autoStart bool) error {
+	auto := 0
+	if autoStart {
+		auto = 1
+	}
+	_, err := db.DB.Exec(`INSERT INTO services(name,command,work_dir,auto_start,created_at) VALUES(?,?,?,?,?)`,
+		name, command, workDir, auto, time.Now())
+	return err
+}
+
+func (a *App) UpdateService(id int64, name, command, workDir string, autoStart bool) error {
+	auto := 0
+	if autoStart {
+		auto = 1
+	}
+	_, err := db.DB.Exec(`UPDATE services SET name=?,command=?,work_dir=?,auto_start=? WHERE id=?`,
+		name, command, workDir, auto, id)
+	return err
+}
+
+func (a *App) SetServiceAutoStart(id int64, autoStart bool) error {
+	auto := 0
+	if autoStart {
+		auto = 1
+	}
+	_, err := db.DB.Exec(`UPDATE services SET auto_start=? WHERE id=?`, auto, id)
+	return err
+}
+
+func (a *App) DeleteService(id int64) error {
+	snap, _ := svc.Stop(id)
+	a.emitServiceStatus(snap)
+	svc.Forget(id)
+	_, err := db.DB.Exec(`DELETE FROM services WHERE id=?`, id)
+	return err
+}
+
+func (a *App) StartService(id int64) error {
+	row := db.DB.QueryRow(`SELECT command,work_dir FROM services WHERE id=?`, id)
+	var command, workDir string
+	if err := row.Scan(&command, &workDir); err != nil {
+		return err
+	}
+	err := svc.Start(id, command, workDir, svc.Callbacks{
+		OnLog: func(entry svc.LogEntry) {
+			runtime.EventsEmit(a.ctx, "service:log", map[string]any{
+				"id":        entry.ID,
+				"line":      entry.Line,
+				"isError":   entry.IsError,
+				"timestamp": entry.Timestamp,
+			})
+		},
+		OnStatus: func(snap svc.Snapshot) {
+			a.emitServiceStatus(snap)
+		},
+	})
+	return err
+}
+
+func (a *App) StopService(id int64) error {
+	snap, err := svc.Stop(id)
+	a.emitServiceStatus(snap)
+	return err
+}
+
+func (a *App) RestartService(id int64) error {
+	snap, err := svc.Stop(id)
+	a.emitServiceStatus(snap)
+	if err != nil {
+		return err
+	}
+	time.Sleep(200 * time.Millisecond)
+	return a.StartService(id)
+}
+
+func (a *App) applyServiceSnapshot(s *ServiceInfo, snap svc.Snapshot) {
+	s.Running = snap.Running
+	s.Status = snap.Status
+	s.PID = snap.PID
+	s.StartedAt = snap.StartedAt
+	s.StoppedAt = snap.StoppedAt
+	s.ExitCode = snap.ExitCode
+	s.LastError = snap.LastError
+}
+
+func (a *App) emitServiceStatus(snap svc.Snapshot) {
+	runtime.EventsEmit(a.ctx, "service:status", map[string]any{
+		"id":         snap.ID,
+		"running":    snap.Running,
+		"status":     snap.Status,
+		"pid":        snap.PID,
+		"started_at": snap.StartedAt,
+		"stopped_at": snap.StoppedAt,
+		"exit_code":  snap.ExitCode,
+		"last_error": snap.LastError,
+	})
 }
