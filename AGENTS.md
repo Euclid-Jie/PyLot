@@ -66,9 +66,9 @@ cd frontend && npm install && cd ..
 - `WorkflowEditor.vue` — 拖拽画布（Vue Flow）。左侧脚本列表可拖入，节点双击跳转脚本配置并加载最近日志。支持自动布局、复制、定时设置。
 - `TimerModal.vue` — 定时规则配置弹窗。支持新建和编辑已有 schedule，支持从 Schedule 总览选择脚本/工作流目标，支持快捷规则（每日一次、每天多时刻、每周、工作日、循环间隔）和自定义 5 位 cron；每天多时刻会保存为多条 `schedules` 记录。
 - `ServicesView.vue` — 服务管理控制台。左侧服务列表，右侧服务详情/启动停止重启/编辑/删除/跟随 PyLot 启动开关/实时日志；日志从后端服务缓冲读取，避免切换页面后丢失。
-- `ScheduleView.vue` — 定时任务总览和管理入口，显示所有任务（含禁用），支持新增、编辑、启用/禁用和删除。脚本用蓝色竖线标识，工作流用橙色竖线标识。
+- `ScheduleView.vue` — 定时任务总览和管理入口。任务列表默认展示即将运行的启用任务，并按下次运行时间升序排列；提供“即将运行 / 今日运行 / 已停止 / 全部”筛选；支持新增、编辑、启用/禁用和删除；下方合并展示脚本/工作流最近运行情况，脚本记录可查看历史日志。脚本用蓝色竖线标识，工作流用橙色竖线标识。
 - `SettingsView.vue` — 设置页：主题（深色/浅色）、字体、全局 .env 路径、飞书通知（lark-cli 路径 + Open ID）。设置持久化到 `localStorage`（外观）或 DB（env/lark）。
-- `LogPanel.vue` — 实时日志，含 VSCode 图标按钮（调用 `OpenInVSCode(workDir)`）。
+- `LogPanel.vue` — 脚本实时日志，含 VSCode 图标按钮（调用 `OpenInVSCode(workDir)`）。全局底部日志面板不在 Workflow、Services、Schedule 视图显示；服务页使用服务自己的 stdout/stderr 日志，定时页使用最近运行情况面板。
 
 ### Wails 事件
 

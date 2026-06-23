@@ -11,7 +11,7 @@
         <ScriptConfig v-else-if="store.selectedScriptID !== null" :key="store.selectedScriptID" />
         <div v-else class="empty-hint">请从左侧选择脚本，或点击 + 新建</div>
       </div>
-      <footer v-if="store.currentView !== 'workflow'" class="log-footer"><LogPanel /></footer>
+      <footer v-if="showGlobalLogFooter" class="log-footer"><LogPanel /></footer>
     </main>
   </div>
   <div v-if="alertData" class="alert-overlay" @click="alertData = null">
@@ -24,7 +24,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { EventsOn } from '../wailsjs/runtime/runtime.js'
 import { SetWindowSize, GetWindowSize } from '../wailsjs/go/main/App.js'
 import { useMainStore } from './stores/main.js'
@@ -39,6 +39,7 @@ import ServicesView from './components/ServicesView.vue'
 
 const store = useMainStore()
 const alertData = ref(null)
+const showGlobalLogFooter = computed(() => !['workflow', 'services', 'schedule'].includes(store.currentView))
 
 onMounted(async () => {
   const theme = localStorage.getItem('theme') || 'dark'
