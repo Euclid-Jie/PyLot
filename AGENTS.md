@@ -54,7 +54,7 @@ cd frontend && npm install && cd ..
 - `internal/script/runner.go` — 进程启动，注入 `PYTHONIOENCODING=utf-8` 统一编码，`SysProcAttr{HideWindow: true}` 隐藏黑框，支持卡死超时检测；module 模式自动将绝对路径转换为相对 WorkDir 的点号模块名。
 - `internal/service/manager.go` — 长期运行服务进程管理。维护 `starting/running/stopping/exited/failed/stopped` 运行态、PID、启动/停止时间、退出码、最近错误和本次会话最近 1000 行日志；使用 Windows `DecomposeCommandLine` 解析命令，`taskkill /F /T /PID` 停止进程树。
 - `internal/notify/feishu.go` — 调用 `lark-cli` 发飞书消息。`Feishu(cliPath, openID, text)` fire-and-forget；`StatusLabel(status)` 返回中文状态文字。脚本和工作流执行结束后均触发通知。
-- `internal/scheduler/` — robfig/cron v3 封装，管理定时任务注册/移除。`script_id < 0` 表示工作流定时任务（`-workflowId`）。
+- `internal/scheduler/` — robfig/cron v3 封装，管理定时任务注册/移除，并提供 5 位 cron 表达式标准化与校验。`script_id < 0` 表示工作流定时任务（`-workflowId`）。
 - `internal/env/` — .env 文件解析，支持全局 env + 脚本私有 env 双层合并。
 - `internal/workflow/executor.go` — Kahn 拓扑排序 + 按层并发执行，任意节点失败则终止后续层。
 
@@ -64,8 +64,9 @@ cd frontend && npm install && cd ..
 - `Sidebar.vue` — 脚本管理（含分类列表）+ 工作流管理，各有独立 header 和 + 按钮。底部：服务 / 定时任务 / 设置入口并排，并按当前视图高亮。
 - `ScriptConfig.vue` — 脚本配置表单。选择脚本路径后自动调用 `InferFromScriptPath` 推断虚拟环境解释器和工作目录。
 - `WorkflowEditor.vue` — 拖拽画布（Vue Flow）。左侧脚本列表可拖入，节点双击跳转脚本配置并加载最近日志。支持自动布局、复制、定时设置。
+- `TimerModal.vue` — 定时规则配置弹窗。支持新建和编辑已有 schedule，支持从 Schedule 总览选择脚本/工作流目标，支持快捷规则（每日一次、每天多时刻、每周、工作日、循环间隔）和自定义 5 位 cron；每天多时刻会保存为多条 `schedules` 记录。
 - `ServicesView.vue` — 服务管理控制台。左侧服务列表，右侧服务详情/启动停止重启/编辑/删除/跟随 PyLot 启动开关/实时日志；日志从后端服务缓冲读取，避免切换页面后丢失。
-- `ScheduleView.vue` — 定时任务总览，显示所有任务（含禁用）。脚本用蓝色竖线标识，工作流用橙色竖线标识。
+- `ScheduleView.vue` — 定时任务总览和管理入口，显示所有任务（含禁用），支持新增、编辑、启用/禁用和删除。脚本用蓝色竖线标识，工作流用橙色竖线标识。
 - `SettingsView.vue` — 设置页：主题（深色/浅色）、字体、全局 .env 路径、飞书通知（lark-cli 路径 + Open ID）。设置持久化到 `localStorage`（外观）或 DB（env/lark）。
 - `LogPanel.vue` — 实时日志，含 VSCode 图标按钮（调用 `OpenInVSCode(workDir)`）。
 

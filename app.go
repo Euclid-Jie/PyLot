@@ -58,7 +58,9 @@ func (a *App) loadSchedules() {
 		var schedID, scriptID int
 		var cronExpr string
 		rows.Scan(&schedID, &scriptID, &cronExpr)
-		a.addScheduleJob(schedID, scriptID, cronExpr)
+		if err := a.addScheduleJob(schedID, scriptID, cronExpr); err != nil {
+			fmt.Println("Schedule load error:", schedID, err)
+		}
 	}
 }
 
@@ -297,6 +299,11 @@ func (a *App) GetSchedules() []db.Schedule {
 }
 
 func (a *App) SaveSchedule(s db.Schedule) error {
+	s.CronExpr = scheduler.NormalizeCron(s.CronExpr)
+	if err := scheduler.ValidateCron(s.CronExpr); err != nil {
+		return err
+	}
+
 	if s.ID == 0 {
 		res, err := db.DB.Exec(`INSERT INTO schedules(script_id,cron_expr,enabled,created_at) VALUES(?,?,?,?)`,
 			s.ScriptID, s.CronExpr, s.Enabled, time.Now())
@@ -315,18 +322,19 @@ func (a *App) SaveSchedule(s db.Schedule) error {
 
 	scheduler.RemoveJob(s.ID)
 	if s.Enabled == 1 {
-		a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr)
+		if err := a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (a *App) addScheduleJob(schedID, scriptID int, cronExpr string) {
+func (a *App) addScheduleJob(schedID, scriptID int, cronExpr string) error {
 	if scriptID < 0 {
 		wfID := -scriptID
-		scheduler.AddJob(schedID, scriptID, cronExpr, func(_ int) { a.RunWorkflow(wfID) })
-	} else {
-		scheduler.AddJob(schedID, scriptID, cronExpr, func(sid int) { a.RunScript(sid, "") })
+		return scheduler.AddJob(schedID, scriptID, cronExpr, func(_ int) { a.RunWorkflow(wfID) })
 	}
+	return scheduler.AddJob(schedID, scriptID, cronExpr, func(sid int) { a.RunScript(sid, "") })
 }
 
 func (a *App) DeleteSchedule(id int) error {
@@ -336,22 +344,32 @@ func (a *App) DeleteSchedule(id int) error {
 }
 
 func (a *App) ToggleSchedule(id int, enabled bool) error {
+	var scriptID int
+	var cronExpr string
+	if err := db.DB.QueryRow(`SELECT script_id,cron_expr FROM schedules WHERE id=?`, id).Scan(&scriptID, &cronExpr); err != nil {
+		return err
+	}
+	cronExpr = scheduler.NormalizeCron(cronExpr)
+	if enabled {
+		if err := scheduler.ValidateCron(cronExpr); err != nil {
+			return err
+		}
+	}
+
 	val := 0
 	if enabled {
 		val = 1
 	}
-	_, err := db.DB.Exec(`UPDATE schedules SET enabled=? WHERE id=?`, val, id)
+	_, err := db.DB.Exec(`UPDATE schedules SET enabled=?,cron_expr=? WHERE id=?`, val, cronExpr, id)
 	if err != nil {
 		return err
 	}
 
-	var scriptID int
-	var cronExpr string
-	db.DB.QueryRow(`SELECT script_id,cron_expr FROM schedules WHERE id=?`, id).Scan(&scriptID, &cronExpr)
-
 	scheduler.RemoveJob(id)
 	if enabled {
-		a.addScheduleJob(id, scriptID, cronExpr)
+		if err := a.addScheduleJob(id, scriptID, cronExpr); err != nil {
+			return err
+		}
 	}
 	return nil
 }
