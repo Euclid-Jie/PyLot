@@ -54,12 +54,20 @@ export function GetRunningScripts() {
   return window['go']['main']['App']['GetRunningScripts']();
 }
 
+export function GetRunningWorkflows() {
+  return window['go']['main']['App']['GetRunningWorkflows']();
+}
+
 export function GetScheduleOverview() {
   return window['go']['main']['App']['GetScheduleOverview']();
 }
 
 export function GetSchedules() {
   return window['go']['main']['App']['GetSchedules']();
+}
+
+export function GetScript(arg1) {
+  return window['go']['main']['App']['GetScript'](arg1);
 }
 
 export function GetScripts() {
@@ -148,6 +156,10 @@ export function StopScript(arg1) {
 
 export function StopService(arg1) {
   return window['go']['main']['App']['StopService'](arg1);
+}
+
+export function StopWorkflow(arg1) {
+  return window['go']['main']['App']['StopWorkflow'](arg1);
 }
 
 export function ToggleSchedule(arg1, arg2) {

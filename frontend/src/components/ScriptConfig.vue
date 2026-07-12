@@ -1,24 +1,28 @@
 <template>
   <div class="script-config" @keydown.ctrl.s.prevent="handleSave">
-    <div class="config-header">
-      <h2>{{ isNew ? '新建脚本' : form.name || '脚本配置' }}</h2>
+    <div class="config-header ui-page-header">
+      <div>
+        <h2>{{ isNew ? '新建脚本' : form.name || '脚本配置' }}</h2>
+        <p class="ui-page-subtitle">配置运行环境、参数和私有环境变量</p>
+      </div>
       <div class="header-actions">
-        <span v-if="isRunning" class="badge-running">● 运行中</span>
-        <button v-if="!isRunning" class="btn-run" @click="handleRun">▶ 运行</button>
-        <button v-if="isRunning" class="btn-stop" @click="handleStop">■ 停止</button>
-        <button class="btn-save" @click="handleSave">保存</button>
-        <button v-if="!isNew" class="btn-copy" @click="handleCopy">复制</button>
-        <button class="btn-timer" @click="showTimer = true">⏰ 定时</button>
-        <button v-if="!isNew" class="btn-delete" @click="handleDelete">删除</button>
+        <span v-if="isRunning" class="ui-status running">运行中</span>
+        <button v-if="!isRunning" class="ui-btn primary" :disabled="isNew || store.isDirty || !!actionPending" :title="isNew || store.isDirty ? '请先保存脚本' : '运行脚本'" @click="handleRun"><UiIcon name="play" />{{ actionPending === 'run' ? '启动中' : '运行' }}</button>
+        <button v-else class="ui-btn danger" :disabled="!!actionPending" @click="handleStop"><UiIcon name="stop" />{{ actionPending === 'stop' ? '停止中' : '停止' }}</button>
+        <button class="ui-btn" :disabled="saving || isRunning" @click="handleSave"><UiIcon name="save" />{{ saving ? '保存中' : '保存' }}</button>
+        <button v-if="!isNew" class="ui-icon-btn" :disabled="isRunning || !!actionPending" title="复制脚本" aria-label="复制脚本" @click="handleCopy"><UiIcon name="copy" /></button>
+        <button class="ui-icon-btn" :disabled="isNew || isRunning" :title="isNew ? '请先保存脚本' : '设置定时任务'" aria-label="设置定时任务" @click="showTimer = true"><UiIcon name="clock" /></button>
+        <button v-if="!isNew" class="ui-icon-btn danger-icon" :disabled="isRunning || !!actionPending" title="删除脚本" aria-label="删除脚本" @click="showDeleteConfirm = true"><UiIcon name="delete" /></button>
       </div>
     </div>
 
+    <div v-if="actionError" class="action-message">{{ actionError }}</div>
     <fieldset :disabled="isRunning" class="form-body">
       <div class="form-row">
         <label>名称</label>
-        <input v-model="form.name" style="flex:2" />
+        <input v-model="form.name" class="ui-input" style="flex:2" />
         <label class="label-inline">分类</label>
-        <select v-model="form.category" style="flex:1">
+        <select v-model="form.category" class="ui-input" style="flex:1">
           <option value="crawler">爬取上传</option>
           <option value="processor">数据处理</option>
           <option value="tool">个人工具</option>
@@ -33,48 +37,48 @@
         </div>
         <span style="flex:1"></span>
         <label class="label-inline">超时(s)</label>
-        <input type="number" v-model.number="form.timeoutSeconds" min="0" placeholder="0=∞" style="width:80px;flex:none" />
+        <input type="number" v-model.number="form.timeoutSeconds" class="ui-input" min="0" placeholder="0=∞" style="width:80px;flex:none" />
       </div>
 
       <div class="form-row">
         <label>解释器</label>
-        <input v-model="form.interpreterPath" /><button @click="browse('interpreter')">浏览</button>
+        <input v-model="form.interpreterPath" class="ui-input ui-mono" /><button class="ui-btn" @click="browse('interpreter')"><UiIcon name="folder" />选择</button>
       </div>
       <div class="form-row">
         <label>脚本路径</label>
-        <input v-model="form.scriptPath" />
-        <button @click="browse('script')">浏览</button>
+        <input v-model="form.scriptPath" class="ui-input ui-mono" />
+        <button class="ui-btn" @click="browse('script')"><UiIcon name="folder" />选择</button>
       </div>
       <div class="form-row">
         <label>工作目录</label>
-        <input v-model="form.workDir" />
-        <button @click="browseDir">浏览</button>
+        <input v-model="form.workDir" class="ui-input ui-mono" />
+        <button class="ui-btn" @click="browseDir"><UiIcon name="folder" />选择</button>
       </div>
 
       <div class="form-section">
         <div class="section-header">
           <span>固定参数</span>
-          <button class="btn-add-env" @click="argPairs.push({ flag: '', val: '' })">+ 添加</button>
+          <button class="ui-btn small" @click="argPairs.push({ flag: '', val: '' })"><UiIcon name="add" />添加参数</button>
         </div>
         <div v-for="(arg, i) in argPairs" :key="'arg'+i" class="env-row">
           <span class="arg-prefix">--</span>
           <input v-model="arg.flag" placeholder="begin" style="flex:1" />
           <span class="env-eq"> </span>
           <input v-model="arg.val" placeholder="value" style="flex:2" />
-          <button class="btn-rm" @click="argPairs.splice(i, 1)">✕</button>
+          <button class="ui-icon-btn danger-icon" title="移除参数" aria-label="移除参数" @click="argPairs.splice(i, 1)"><UiIcon name="x" /></button>
         </div>
       </div>
 
       <div class="form-section">
         <div class="section-header">
           <span>私有环境变量</span>
-          <button class="btn-add-env" @click="envPairs.push({ key: '', val: '' })">+ 添加</button>
+          <button class="ui-btn small" @click="envPairs.push({ key: '', val: '' })"><UiIcon name="add" />添加变量</button>
         </div>
         <div v-for="(kv, i) in envPairs" :key="i" class="env-row">
           <input v-model="kv.key" placeholder="KEY" />
           <span class="env-eq">=</span>
           <input v-model="kv.val" placeholder="VALUE" />
-          <button class="btn-rm" @click="envPairs.splice(i, 1)">✕</button>
+          <button class="ui-icon-btn danger-icon" title="移除变量" aria-label="移除变量" @click="envPairs.splice(i, 1)"><UiIcon name="x" /></button>
         </div>
       </div>
     </fieldset>
@@ -82,19 +86,27 @@
 
   <TempArgsModal v-if="showTempArgs" :fixedArgs="buildFixedArgs()" @run="doRun" @close="showTempArgs = false" />
   <TimerModal v-if="showTimer" :scriptId="form.id" @close="showTimer = false" />
-  <div v-if="toast" class="toast">{{ toast }}</div>
+  <ConfirmDialog v-if="showDeleteConfirm" title="删除脚本？" :message="`脚本“${form.name}”及其配置将被删除，此操作无法撤销。`" @confirm="handleDelete" @cancel="showDeleteConfirm = false" />
+  <div v-if="toast" class="ui-toast">{{ toast }}</div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { GetScripts, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
+import { ref, computed, nextTick, onMounted, watch } from 'vue'
+import { GetScript, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 import TempArgsModal from './TempArgsModal.vue'
 import TimerModal from './TimerModal.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
+import UiIcon from './UiIcon.vue'
 
 const store = useMainStore()
 const showTempArgs = ref(false)
 const showTimer = ref(false)
+const showDeleteConfirm = ref(false)
+const saving = ref(false)
+const actionPending = ref('')
+const actionError = ref('')
+let hydrating = true
 
 const form = ref({
   id: null, name: '', category: 'crawler', interpreterPath: 'python',
@@ -110,16 +122,25 @@ const isRunning = computed(() => store.runningScripts.has(store.selectedScriptID
 onMounted(loadScript)
 watch(() => store.selectedScriptID, loadScript)
 watch(() => form.value.workDir, v => { store.selectedScriptWorkDir = v || '' })
+watch([form, envPairs, argPairs], () => {
+  if (!hydrating) store.markDirty()
+}, { deep: true })
 
 async function loadScript() {
+  hydrating = true
+  actionError.value = ''
+  store.clearDirty()
   if (isNew.value) {
     form.value = { id: null, name: '', category: 'crawler', interpreterPath: 'python', workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '', timeoutSeconds: 0, privateEnv: '{}' }
     envPairs.value = []
     argPairs.value = []
+    await finishHydration()
     return
   }
-  const scripts = await GetScripts()
-  const s = scripts?.find(x => x.id === store.selectedScriptID)
+  const s = await GetScript(store.selectedScriptID).catch(error => {
+    actionError.value = normalizeError(error)
+    return null
+  })
   if (s) {
     form.value = { ...s }
     store.selectedScriptWorkDir = s.workDir || ''
@@ -136,6 +157,12 @@ async function loadScript() {
     try { const obj = JSON.parse(s.privateEnv || ''); envPairs.value = Object.entries(obj).map(([k, v]) => ({ key: k, val: v })) }
     catch { envPairs.value = [] }
   }
+  await finishHydration()
+}
+
+async function finishHydration() {
+  await nextTick()
+  hydrating = false
 }
 
 function buildFixedArgs() {
@@ -149,15 +176,28 @@ function buildPrivateEnv() {
 }
 
 async function handleSave() {
+  if (saving.value) return
+  actionError.value = ''
+  if (!form.value.name.trim()) { actionError.value = '请输入脚本名称'; return }
+  if (!form.value.scriptPath.trim()) { actionError.value = '请选择脚本文件'; return }
+  saving.value = true
   const data = { ...form.value, fixedArgs: buildFixedArgs(), privateEnv: buildPrivateEnv() }
-  if (isNew.value) {
-    const id = await CreateScript(data)
-    store.setScript(id)
-  } else {
-    await UpdateScript(data)
+  try {
+    if (isNew.value) {
+      const id = await CreateScript(data)
+      store.clearDirty()
+      store.setScript(id)
+    } else {
+      await UpdateScript(data)
+      store.clearDirty()
+    }
+    store.refreshScriptList()
+    showToast('保存成功')
+  } catch (error) {
+    actionError.value = normalizeError(error)
+  } finally {
+    saving.value = false
   }
-  store.refreshScriptList()
-  showToast('保存成功')
 }
 
 const toast = ref('')
@@ -167,31 +207,71 @@ function showToast(msg) {
 }
 
 function handleRun() {
+  if (isNew.value || store.isDirty || actionPending.value) return
   if (argPairs.value.some(a => a.flag)) showTempArgs.value = true
   else doRun('')
 }
 
 async function doRun(args) {
   showTempArgs.value = false
-  await RunScript(store.selectedScriptID, args)
+  actionPending.value = 'run'
+  actionError.value = ''
+  store.setRunning(store.selectedScriptID, true)
+  try {
+    await RunScript(store.selectedScriptID, args)
+  } catch (error) {
+    store.setRunning(store.selectedScriptID, false)
+    actionError.value = normalizeError(error)
+  } finally {
+    actionPending.value = ''
+  }
 }
 
 async function handleStop() {
-  await StopScript(store.selectedScriptID)
+  if (actionPending.value) return
+  actionPending.value = 'stop'
+  actionError.value = ''
+  try {
+    await StopScript(store.selectedScriptID)
+  } catch (error) {
+    actionError.value = normalizeError(error)
+  } finally {
+    actionPending.value = ''
+  }
 }
 
 async function handleDelete() {
-  if (!confirm('确认删除此脚本？')) return
-  await DeleteScript(store.selectedScriptID)
-  store.refreshScriptList()
-  store.setScript(null)
-  store.setView('script')
+  if (actionPending.value) return
+  actionPending.value = 'delete'
+  showDeleteConfirm.value = false
+  try {
+    await DeleteScript(store.selectedScriptID)
+    store.clearDirty()
+    store.refreshScriptList()
+    store.setScript(null)
+    store.setView('script')
+  } catch (error) {
+    actionError.value = normalizeError(error)
+  } finally {
+    actionPending.value = ''
+  }
 }
 
 async function handleCopy() {
+  if (actionPending.value) return
+  actionPending.value = 'copy'
+  actionError.value = ''
   const data = { ...form.value, id: null, name: form.value.name + ' (副本)', fixedArgs: buildFixedArgs(), privateEnv: buildPrivateEnv() }
-  const id = await CreateScript(data)
-  store.setScript(id)
+  try {
+    const id = await CreateScript(data)
+    store.clearDirty()
+    store.refreshScriptList()
+    store.setScript(id)
+  } catch (error) {
+    actionError.value = normalizeError(error)
+  } finally {
+    actionPending.value = ''
+  }
 }
 
 async function browse(type) {
@@ -210,6 +290,10 @@ async function browse(type) {
 async function browseDir() {
   const p = await OpenDirectoryDialog('选择工作目录')
   if (p) form.value.workDir = p
+}
+
+function normalizeError(error) {
+  return String(error?.message || error || '操作失败').replace(/^Error:\s*/i, '')
 }
 </script>
 
@@ -254,4 +338,35 @@ async function browseDir() {
 .btn-rm:hover { color: var(--red); }
 fieldset:disabled { opacity: 0.4; pointer-events: none; }
 .toast { position: fixed; bottom: 280px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; z-index: 200; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+
+/* Unified desktop form treatment. */
+.script-config { max-width: 1180px; margin: 0 auto; }
+.config-header { margin-bottom: 22px; }
+.config-header h2 { font-size: 19px; }
+.header-actions { gap: 6px; flex-wrap: nowrap; }
+.danger-icon:hover { border-color: rgba(248, 81, 73, .35); background: var(--red-dim); color: var(--red); }
+.action-message { margin: -10px 0 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: 12px; }
+.form-body { display: flex; flex-direction: column; gap: 0; }
+.form-row { min-height: 44px; margin-bottom: 6px; }
+.form-row > label:first-child { width: 88px; color: var(--text-dim); font-size: 13px; text-align: left; }
+.label-inline { font-size: 13px; }
+.form-row input, .form-row select, .env-row input { min-height: var(--control-lg); padding: 7px 10px; border-color: var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text); font-size: 13px; }
+.form-row > button.ui-btn { min-height: var(--control-lg); padding: 0 12px; background: var(--surface); color: var(--text-dim); }
+.mode-toggle { background: var(--input-bg); }
+.mode-btn { min-height: 34px; padding: 0 18px; font-size: 13px; }
+.mode-btn.active { background: var(--accent-dim); color: var(--accent); }
+.form-section { margin-top: 18px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.section-header { margin-bottom: 12px; padding-bottom: 10px; }
+.section-header span { color: var(--text-dim); font-size: 13px; letter-spacing: 0; text-transform: none; }
+.env-row { min-height: 36px; margin-bottom: 7px; }
+.env-row:last-child { margin-bottom: 0; }
+.env-row .ui-icon-btn { width: 30px; height: 30px; }
+fieldset:disabled { opacity: .62; }
+@media (max-width: 980px) {
+  .config-header { align-items: flex-start; }
+  .header-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .form-row { flex-wrap: wrap; }
+  .form-row > label:first-child { width: 100%; }
+}
+
 </style>

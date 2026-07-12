@@ -1,72 +1,74 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal">
-      <div class="modal-header">
-        <h3>历史运行记录</h3>
-        <button @click="$emit('close')">✕</button>
+  <div class="dialog-overlay" @click.self="$emit('close')">
+    <section class="history-dialog" role="dialog" aria-modal="true" aria-labelledby="history-title">
+      <header><div><span>运行记录</span><h3 id="history-title">历史日志</h3></div><button class="ui-icon-btn" title="关闭" aria-label="关闭" @click="$emit('close')"><UiIcon name="x" /></button></header>
+      <div class="history-body">
+        <aside class="record-list">
+          <button v-for="record in records" :key="record.id" :class="['record-item', { active: detail?.id === record.id }]" @click="loadDetail(record.id)">
+            <span :class="['status-dot', record.status]"></span>
+            <span class="record-main"><strong>{{ statusText(record.status) }}</strong><small>{{ fmt(record.startedAt) }}</small></span>
+            <span v-if="record.isError" class="error-label">异常</span>
+          </button>
+          <div v-if="loading" class="empty">正在加载记录...</div>
+          <div v-else-if="!records.length" class="empty">暂无运行记录</div>
+        </aside>
+        <section class="detail-log">
+          <div v-if="detailLoading" class="empty detail-empty">正在加载日志...</div>
+          <div v-else-if="detail" class="log-body"><div v-for="(line, index) in detail.logOutput.split('\n')" :key="index" class="log-line">{{ line }}</div></div>
+          <div v-else class="empty detail-empty">选择一条记录查看日志</div>
+        </section>
       </div>
-      <div class="record-list">
-        <div v-for="r in records" :key="r.id" class="record-item" @click="loadDetail(r.id)">
-          <span :class="['status', r.status]">{{ r.status }}</span>
-          <span class="time">{{ fmt(r.startedAt) }}</span>
-          <span class="time">→ {{ r.endedAt ? fmt(r.endedAt) : '—' }}</span>
-          <span v-if="r.isError" class="err-badge">异常</span>
-        </div>
-        <div v-if="!records.length" class="empty">暂无记录</div>
-      </div>
-      <div v-if="detail" class="detail-log">
-        <div class="log-body">
-          <div v-for="(line, i) in detail.logOutput.split('\n')" :key="i" class="log-line">{{ line }}</div>
-        </div>
-      </div>
-    </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { GetRunHistory, GetRunDetail } from '../../wailsjs/go/main/App.js'
+import { onMounted, ref } from 'vue'
+import { GetRunDetail, GetRunHistory } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
+import UiIcon from './UiIcon.vue'
 
 defineEmits(['close'])
 const store = useMainStore()
 const records = ref([])
 const detail = ref(null)
-
+const loading = ref(true)
+const detailLoading = ref(false)
+const labels = { running: '运行中', success: '成功', error: '失败', killed: '已终止', timeout: '已超时' }
 onMounted(async () => {
-  if (store.selectedScriptID > 0) {
-    records.value = await GetRunHistory(store.selectedScriptID) || []
+  try {
+    if (store.selectedScriptID > 0) records.value = await GetRunHistory(store.selectedScriptID) || []
+  } finally {
+    loading.value = false
   }
 })
-
 async function loadDetail(id) {
-  detail.value = await GetRunDetail(id)
+  detailLoading.value = true
+  try { detail.value = await GetRunDetail(id) }
+  finally { detailLoading.value = false }
 }
-
-function fmt(t) {
-  if (!t) return ''
-  return new Date(t).toLocaleString()
-}
+function fmt(time) { return time ? new Date(time).toLocaleString('zh-CN', { hour12: false }) : '' }
+function statusText(status) { return labels[status] || status }
 </script>
 
 <style scoped>
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 20px; width: 700px; max-height: 80vh; display: flex; flex-direction: column; }
-.modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.modal-header button { background: none; border: none; color: #aaa; font-size: 16px; cursor: pointer; }
-.record-list { overflow-y: auto; max-height: 200px; border: 1px solid #333; border-radius: 4px; }
-.record-item { display: flex; gap: 12px; align-items: center; padding: 7px 12px; font-size: 13px; cursor: pointer; border-bottom: 1px solid #222; }
-.record-item:hover { background: #1e2d50; }
-.status { padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold; }
-.status.success { background: #1b5e20; color: #4caf50; }
-.status.error { background: #4a0000; color: #f44747; }
-.status.running { background: #0d47a1; color: #64b5f6; }
-.status.killed { background: #3e2723; color: #ff8a65; }
-.status.timeout { background: #4a3000; color: #ffb300; }
-.time { color: #aaa; font-size: 12px; }
-.err-badge { background: #e74c3c; color: #fff; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
-.empty { padding: 16px; text-align: center; color: #555; font-size: 13px; }
-.detail-log { margin-top: 12px; flex: 1; overflow: hidden; }
-.log-body { background: #1e1e1e; border-radius: 4px; padding: 8px 12px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px; }
-.log-line { line-height: 1.6; color: #d4d4d4; white-space: pre-wrap; word-break: break-all; text-align: left; display: block; }
+.history-dialog { width: min(760px, calc(100vw - 40px)); height: min(520px, calc(100vh - 40px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
+header { min-height: 66px; display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+header span { color: var(--text-muted); font-size: 12px; }
+h3 { font-size: 17px; font-weight: 600; }
+.history-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
+.record-list { overflow-y: auto; border-right: 1px solid var(--border); background: var(--sidebar-bg); }
+.record-item { width: 100%; min-height: 54px; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
+.record-item:hover { background: var(--surface-hover); }
+.record-item.active { background: var(--accent-dim); }
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.status-dot.success { background: var(--green); } .status-dot.error, .status-dot.killed, .status-dot.timeout { background: var(--red); } .status-dot.running { background: var(--accent); }
+.record-main { min-width: 0; display: flex; flex-direction: column; }
+.record-main strong { font-size: 12px; font-weight: 600; } .record-main small { overflow: hidden; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.error-label { color: var(--red); font-size: 11px; }
+.detail-log { min-width: 0; min-height: 0; padding: 12px; background: var(--bg); }
+.log-body { height: 100%; overflow: auto; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); font-family: var(--mono); font-size: 12px; }
+.log-line { color: var(--text-dim); line-height: 1.65; white-space: pre-wrap; word-break: break-all; }
+.empty { padding: 20px; color: var(--text-muted); font-size: 12px; text-align: center; }
+.detail-empty { height: 100%; display: grid; place-items: center; }
 </style>

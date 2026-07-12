@@ -3,10 +3,12 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"syscall"
 	"time"
 
@@ -22,11 +24,13 @@ import (
 )
 
 type App struct {
-	ctx context.Context
+	ctx             context.Context
+	workflowMu      sync.Mutex
+	workflowCancels map[int]context.CancelFunc
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{workflowCancels: make(map[int]context.CancelFunc)}
 }
 
 func (a *App) startup(ctx context.Context) {
@@ -47,6 +51,11 @@ func (a *App) startup(ctx context.Context) {
 
 func (a *App) shutdown(ctx context.Context) {
 	scheduler.Stop()
+	a.workflowMu.Lock()
+	for _, cancel := range a.workflowCancels {
+		cancel()
+	}
+	a.workflowMu.Unlock()
 	for _, id := range script.GetRunningIDs() {
 		script.StopScript(id)
 	}
@@ -151,6 +160,10 @@ func (a *App) GetScripts() []db.Script {
 	return scripts
 }
 
+func (a *App) GetScript(id int) (*db.Script, error) {
+	return script.GetByID(id)
+}
+
 func (a *App) GetScriptsByCategory(category string) []db.Script {
 	scripts, _ := script.GetByCategory(category)
 	return scripts
@@ -166,8 +179,62 @@ func (a *App) UpdateScript(s db.Script) error {
 }
 
 func (a *App) DeleteScript(id int) error {
-	db.DB.Exec(`DELETE FROM schedules WHERE script_id=?`, id)
-	return script.Delete(id)
+	wfRows, err := db.DB.Query(`SELECT name,graph FROM workflows`)
+	if err != nil {
+		return err
+	}
+	for wfRows.Next() {
+		var name, graphJSON string
+		if err := wfRows.Scan(&name, &graphJSON); err != nil {
+			wfRows.Close()
+			return err
+		}
+		var graph workflow.Graph
+		if json.Unmarshal([]byte(graphJSON), &graph) == nil {
+			for _, node := range graph.Nodes {
+				if node.ScriptID == id {
+					wfRows.Close()
+					return fmt.Errorf("script is used by workflow %q", name)
+				}
+			}
+		}
+	}
+	wfRows.Close()
+
+	rows, err := db.DB.Query(`SELECT id FROM schedules WHERE script_id=?`, id)
+	if err != nil {
+		return err
+	}
+	var scheduleIDs []int
+	for rows.Next() {
+		var scheduleID int
+		if err := rows.Scan(&scheduleID); err != nil {
+			rows.Close()
+			return err
+		}
+		scheduleIDs = append(scheduleIDs, scheduleID)
+	}
+	rows.Close()
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM schedules WHERE script_id=?`, id); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM scripts WHERE id=?`, id); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	for _, scheduleID := range scheduleIDs {
+		scheduler.RemoveJob(scheduleID)
+	}
+	return nil
 }
 
 func (a *App) RunScript(scriptID int, tempArgs string) error {
@@ -325,17 +392,31 @@ func (a *App) SaveSchedule(s db.Schedule) error {
 		}
 		id, _ := res.LastInsertId()
 		s.ID = int(id)
-	} else {
-		_, err := db.DB.Exec(`UPDATE schedules SET script_id=?,cron_expr=?,enabled=? WHERE id=?`,
-			s.ScriptID, s.CronExpr, s.Enabled, s.ID)
-		if err != nil {
-			return err
+		if s.Enabled == 1 {
+			if err := a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr); err != nil {
+				db.DB.Exec(`DELETE FROM schedules WHERE id=?`, s.ID)
+				return err
+			}
 		}
+		return nil
 	}
 
+	var oldScriptID, oldEnabled int
+	var oldCronExpr string
+	if err := db.DB.QueryRow(`SELECT script_id,cron_expr,enabled FROM schedules WHERE id=?`, s.ID).Scan(&oldScriptID, &oldCronExpr, &oldEnabled); err != nil {
+		return err
+	}
+	if _, err := db.DB.Exec(`UPDATE schedules SET script_id=?,cron_expr=?,enabled=? WHERE id=?`,
+		s.ScriptID, s.CronExpr, s.Enabled, s.ID); err != nil {
+		return err
+	}
 	scheduler.RemoveJob(s.ID)
 	if s.Enabled == 1 {
 		if err := a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr); err != nil {
+			db.DB.Exec(`UPDATE schedules SET script_id=?,cron_expr=?,enabled=? WHERE id=?`, oldScriptID, oldCronExpr, oldEnabled, s.ID)
+			if oldEnabled == 1 {
+				_ = a.addScheduleJob(s.ID, oldScriptID, oldCronExpr)
+			}
 			return err
 		}
 	}
@@ -357,14 +438,21 @@ func (a *App) DeleteSchedule(id int) error {
 }
 
 func (a *App) ToggleSchedule(id int, enabled bool) error {
-	var scriptID int
+	var scriptID, oldEnabled int
 	var cronExpr string
-	if err := db.DB.QueryRow(`SELECT script_id,cron_expr FROM schedules WHERE id=?`, id).Scan(&scriptID, &cronExpr); err != nil {
+	if err := db.DB.QueryRow(`SELECT script_id,cron_expr,enabled FROM schedules WHERE id=?`, id).Scan(&scriptID, &cronExpr, &oldEnabled); err != nil {
 		return err
+	}
+	if (oldEnabled == 1) == enabled {
+		return nil
 	}
 	cronExpr = scheduler.NormalizeCron(cronExpr)
 	if enabled {
 		if err := scheduler.ValidateCron(cronExpr); err != nil {
+			return err
+		}
+		scheduler.RemoveJob(id)
+		if err := a.addScheduleJob(id, scriptID, cronExpr); err != nil {
 			return err
 		}
 	}
@@ -375,14 +463,14 @@ func (a *App) ToggleSchedule(id int, enabled bool) error {
 	}
 	_, err := db.DB.Exec(`UPDATE schedules SET enabled=?,cron_expr=? WHERE id=?`, val, cronExpr, id)
 	if err != nil {
+		if enabled {
+			scheduler.RemoveJob(id)
+		}
 		return err
 	}
 
-	scheduler.RemoveJob(id)
-	if enabled {
-		if err := a.addScheduleJob(id, scriptID, cronExpr); err != nil {
-			return err
-		}
+	if !enabled {
+		scheduler.RemoveJob(id)
 	}
 	return nil
 }
@@ -446,6 +534,9 @@ func (a *App) GetWorkflows() []db.Workflow {
 }
 
 func (a *App) SaveWorkflow(w db.Workflow) (int, error) {
+	if _, err := workflow.ParseGraph(w.Graph); err != nil {
+		return 0, err
+	}
 	now := time.Now()
 	if w.ID == 0 {
 		res, err := db.DB.Exec(`INSERT INTO workflows(name,graph,created_at,updated_at) VALUES(?,?,?,?)`,
@@ -462,43 +553,131 @@ func (a *App) SaveWorkflow(w db.Workflow) (int, error) {
 }
 
 func (a *App) DeleteWorkflow(id int) error {
-	_, err := db.DB.Exec(`DELETE FROM workflows WHERE id=?`, id)
-	return err
+	_ = a.StopWorkflow(id)
+	rows, err := db.DB.Query(`SELECT id FROM schedules WHERE script_id=?`, -id)
+	if err != nil {
+		return err
+	}
+	var scheduleIDs []int
+	for rows.Next() {
+		var scheduleID int
+		if err := rows.Scan(&scheduleID); err != nil {
+			rows.Close()
+			return err
+		}
+		scheduleIDs = append(scheduleIDs, scheduleID)
+	}
+	rows.Close()
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM schedules WHERE script_id=?`, -id); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if _, err = tx.Exec(`DELETE FROM workflows WHERE id=?`, id); err != nil {
+		tx.Rollback()
+		return err
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	for _, scheduleID := range scheduleIDs {
+		scheduler.RemoveJob(scheduleID)
+	}
+	return nil
 }
 
 func (a *App) RunWorkflow(id int) error {
+	a.workflowMu.Lock()
+	if _, running := a.workflowCancels[id]; running {
+		a.workflowMu.Unlock()
+		return fmt.Errorf("workflow already running")
+	}
+	runCtx, cancel := context.WithCancel(a.ctx)
+	a.workflowCancels[id] = cancel
+	a.workflowMu.Unlock()
+
 	cfg := a.GetGlobalConfig()
 	var wfName string
-	db.DB.QueryRow(`SELECT name FROM workflows WHERE id=?`, id).Scan(&wfName)
+	if err := db.DB.QueryRow(`SELECT name FROM workflows WHERE id=?`, id).Scan(&wfName); err != nil {
+		a.workflowMu.Lock()
+		delete(a.workflowCancels, id)
+		a.workflowMu.Unlock()
+		cancel()
+		return err
+	}
+	runtime.EventsEmit(a.ctx, "task:status", map[string]interface{}{
+		"scriptID": -id,
+		"status":   "running",
+	})
 	go func() {
-		err := workflow.Run(a.ctx, id, cfg.EnvFilePath,
+		defer func() {
+			a.workflowMu.Lock()
+			delete(a.workflowCancels, id)
+			a.workflowMu.Unlock()
+			cancel()
+		}()
+		err := workflow.Run(runCtx, id, cfg.EnvFilePath,
 			func(runID int, nodeID string, scriptID int, status string) {
 				runtime.EventsEmit(a.ctx, "workflow:node-status", map[string]interface{}{
-					"runId": runID, "nodeId": nodeID, "scriptId": scriptID, "status": status,
+					"workflowId": id, "runId": runID, "nodeId": nodeID, "scriptId": scriptID, "status": status,
 				})
 				runtime.EventsEmit(a.ctx, "task:status", map[string]interface{}{
 					"scriptID": scriptID, "status": status,
 				})
 			},
 			func(scriptID int, line string, isError bool) {
-				runtime.EventsEmit(a.ctx, "log:line", map[string]interface{}{
+				entry := map[string]interface{}{
 					"scriptID": scriptID, "line": line, "isError": isError,
 					"timestamp": time.Now().Format("15:04:05"),
-				})
+				}
+				runtime.EventsEmit(a.ctx, "log:line", entry)
+				entry["workflowId"] = id
+				runtime.EventsEmit(a.ctx, "workflow:log", entry)
 			},
 		)
 		status := "success"
-		if err != nil {
+		if errors.Is(err, context.Canceled) {
+			status = "killed"
+		} else if err != nil {
 			status = "error"
 		}
 		runtime.EventsEmit(a.ctx, "workflow:status", map[string]interface{}{
 			"workflowId": id,
 			"status":     status,
 		})
+		runtime.EventsEmit(a.ctx, "task:status", map[string]interface{}{
+			"scriptID": -id,
+			"status":   status,
+		})
 		go notify.Feishu(cfg.LarkCLIPath, cfg.LarkOpenID,
 			fmt.Sprintf("[PyLot] 工作流「%s」执行%s", wfName, notify.StatusLabel(status)))
 	}()
 	return nil
+}
+
+func (a *App) StopWorkflow(id int) error {
+	a.workflowMu.Lock()
+	cancel, running := a.workflowCancels[id]
+	a.workflowMu.Unlock()
+	if !running {
+		return fmt.Errorf("workflow not running")
+	}
+	cancel()
+	return nil
+}
+
+func (a *App) GetRunningWorkflows() []int {
+	a.workflowMu.Lock()
+	defer a.workflowMu.Unlock()
+	ids := make([]int, 0, len(a.workflowCancels))
+	for id := range a.workflowCancels {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 func (a *App) GetWorkflowRuns(id int) []db.WorkflowRun {

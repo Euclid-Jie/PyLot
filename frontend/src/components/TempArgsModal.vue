@@ -1,36 +1,32 @@
 <template>
-  <div class="modal-overlay" @click.self="$emit('close')">
-    <div class="modal">
-      <h3>临时参数</h3>
-      <p class="hint">当前固定参数：<code>{{ fixedArgs || '（无）' }}</code></p>
-      <label>临时参数（将完全替换固定参数）：</label>
-      <input v-model="tempArgs" placeholder="输入临时参数..." />
-      <div class="modal-actions">
-        <button class="btn-secondary" @click="$emit('run', '')">使用固定参数运行</button>
-        <button class="btn-primary" @click="$emit('run', tempArgs)">使用临时参数运行</button>
-        <button class="btn-cancel" @click="$emit('close')">取消</button>
+  <div class="dialog-overlay" @click.self="$emit('close')">
+    <section class="args-dialog" role="dialog" aria-modal="true" aria-labelledby="args-title">
+      <header><div><span>运行配置</span><h3 id="args-title">临时参数</h3></div><button class="ui-icon-btn" title="关闭" aria-label="关闭" @click="$emit('close')"><UiIcon name="x" /></button></header>
+      <div class="dialog-body">
+        <label>当前固定参数</label><code>{{ fixedArgs || '无' }}</code>
+        <label for="temp-args">本次运行参数</label><input id="temp-args" v-model="tempArgs" class="ui-input ui-mono" placeholder="输入参数；留空则使用固定参数" @keydown.enter="$emit('run', tempArgs)" />
+        <p>临时参数仅对本次运行生效，不会修改脚本配置。</p>
       </div>
-    </div>
+      <footer><button class="ui-btn" @click="$emit('run', '')">使用固定参数</button><button class="ui-btn primary" @click="$emit('run', tempArgs)"><UiIcon name="play" />运行</button></footer>
+    </section>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import UiIcon from './UiIcon.vue'
 defineProps({ fixedArgs: String })
 defineEmits(['run', 'close'])
 const tempArgs = ref('')
 </script>
 
 <style scoped>
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 24px; min-width: 400px; }
-h3 { margin-bottom: 12px; }
-.hint { font-size: 13px; color: #aaa; margin-bottom: 12px; }
-code { background: #252526; padding: 2px 6px; border-radius: 3px; }
-label { font-size: 13px; color: #aaa; display: block; margin-bottom: 6px; }
-input { width: 100%; padding: 6px 10px; background: #252526; border: 1px solid #444; color: #e0e0e0; border-radius: 4px; font-size: 13px; margin-bottom: 16px; }
-.modal-actions { display: flex; gap: 8px; }
-.btn-primary { background: #4caf50; color: #fff; border: none; padding: 7px 14px; border-radius: 4px; }
-.btn-secondary { background: #2196f3; color: #fff; border: none; padding: 7px 14px; border-radius: 4px; }
-.btn-cancel { background: #555; color: #ccc; border: none; padding: 7px 14px; border-radius: 4px; }
+.args-dialog { width: min(520px, calc(100vw - 40px)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
+header { display: flex; align-items: flex-start; justify-content: space-between; padding: 18px 20px 14px; border-bottom: 1px solid var(--border); }
+header span { color: var(--text-muted); font-size: 12px; } h3 { font-size: 17px; font-weight: 600; }
+.dialog-body { display: grid; gap: 8px; padding: 18px 20px; }
+label { color: var(--text-dim); font-size: 12px; font-weight: 600; }
+code { display: block; overflow-x: auto; margin-bottom: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--green); font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+p { color: var(--text-muted); font-size: 12px; }
+footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); background: var(--surface); }
 </style>
