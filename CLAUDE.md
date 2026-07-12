@@ -56,19 +56,19 @@ cd frontend && npm install && cd ..
 - `internal/notify/feishu.go` — 调用 `lark-cli` 发飞书消息。`Feishu(cliPath, openID, text)` fire-and-forget；`StatusLabel(status)` 返回中文状态文字。脚本和工作流执行结束后均触发通知。
 - `internal/scheduler/` — robfig/cron v3 封装，管理定时任务注册/移除，并提供 5 位 cron 表达式标准化与校验。`script_id < 0` 表示工作流定时任务（`-workflowId`）。
 - `internal/env/` — .env 文件解析，支持全局 env + 脚本私有 env 双层合并。
-- `internal/workflow/executor.go` — Kahn 拓扑排序 + 按层并发执行，任意节点失败则终止后续层。
+- `internal/workflow/executor.go` — Kahn 拓扑排序 + 按层并发执行，任意节点失败则终止后续层；保存/运行前校验节点、脚本引用、连线与循环依赖。`StopWorkflow` 通过独立 context 取消当前工作流并停止运行节点，最终状态为 `killed`。
 
 ### 前端（Vue3 + Pinia）
 
-- `stores/main.js` — 全局状态。`scriptListVersion` 刷新侧边栏；`selectedWorkflowId` 控制 WorkflowEditor 加载哪个工作流；`setScriptFromWorkflow` 跳转脚本配置时自动加载最近一次运行日志。
-- `Sidebar.vue` — 脚本管理（含分类列表）+ 工作流管理，各有独立 header 和 + 按钮。底部：服务 / 定时任务 / 设置入口并排，并按当前视图高亮。
+- `stores/main.js` — 全局状态。`scriptListVersion` 刷新侧边栏；`selectedWorkflowId` 控制 WorkflowEditor 加载哪个工作流；`setScriptFromWorkflow` 跳转脚本配置时自动加载最近一次运行日志；`isDirty`/`navigationBlocked` 统一处理未保存页面的离开确认。
+- `Sidebar.vue` — 主导航 + 可搜索资源树。脚本按分类展示，工作流独立分组；服务/定时任务位于顶部主导航，设置固定在底部，并按当前视图高亮。
 - `ScriptConfig.vue` — 脚本配置表单。选择脚本路径后自动调用 `InferFromScriptPath` 推断虚拟环境解释器和工作目录。
-- `WorkflowEditor.vue` — 拖拽画布（Vue Flow）。左侧脚本列表可拖入，节点双击跳转脚本配置并加载最近日志。支持自动布局、复制、定时设置。
+- `WorkflowEditor.vue` — 拖拽画布（Vue Flow）。左侧脚本列表支持搜索和拖入，节点双击跳转脚本配置并加载最近日志。支持自动布局、复制、定时设置、真实停止和未保存保护。
 - `TimerModal.vue` — 定时规则配置弹窗。支持新建和编辑已有 schedule，支持从 Schedule 总览选择脚本/工作流目标，支持快捷规则（每日一次、每天多时刻、每周、工作日、循环间隔）和自定义 5 位 cron；每天多时刻会保存为多条 `schedules` 记录。
 - `ServicesView.vue` — 服务管理控制台。左侧服务列表，右侧服务详情/启动停止重启/编辑/删除/跟随 PyLot 启动开关/实时日志；日志从后端服务缓冲读取，避免切换页面后丢失。
 - `ScheduleView.vue` — 定时任务总览和管理入口。任务列表默认展示即将运行的启用任务，并按下次运行时间升序排列；提供“即将运行 / 今日运行 / 已停止 / 全部”筛选；支持新增、编辑、启用/禁用和删除；下方合并展示脚本/工作流最近运行情况，脚本记录可查看历史日志。脚本用蓝色竖线标识，工作流用橙色竖线标识。
 - `SettingsView.vue` — 设置页：主题（深色/浅色）、字体、全局 .env 路径、飞书通知（lark-cli 路径 + Open ID）。设置持久化到 `localStorage`（外观）或 DB（env/lark）。
-- `LogPanel.vue` — 脚本实时日志，含 VSCode 图标按钮（调用 `OpenInVSCode(workDir)`）。全局底部日志面板不在 Workflow、Services、Schedule 视图显示；服务页使用服务自己的 stdout/stderr 日志，定时页使用最近运行情况面板。
+- `LogPanel.vue` — 脚本实时日志，支持搜索、仅看错误、自动滚动、历史记录、折叠和 VSCode 打开。全局底部日志只在已保存脚本详情显示；工作流运行页使用按节点聚合日志，服务页和定时页使用各自日志区域，设置页不显示输出。
 
 ### Wails 事件
 
@@ -78,6 +78,7 @@ cd frontend && npm install && cd ..
 - `task:alert` — 异常弹窗通知
 - `workflow:node-status` — 工作流节点状态变更
 - `workflow:status` — 工作流整体完成/失败
+- `workflow:log` — 工作流聚合日志行（含 `workflowId`、`scriptID`、`isError` 与 `timestamp`）
 - `service:log` — 服务 stdout/stderr 日志行（含 `isError` 与 `timestamp`）
 - `service:status` — 服务状态变更（含 `status`、`running`、`pid`、`started_at`、`stopped_at`、`exit_code`、`last_error`）
 - `tray:schedule` — 托盘点击"定时任务"，前端切换到 Schedule 视图
@@ -91,6 +92,8 @@ cd frontend && npm install && cd ..
 - systray goroutine 必须 `goruntime.LockOSThread()`，否则休眠唤醒后消息泵失效。
 - SQLite 使用 WAL 模式 + `busy_timeout=5000`，防止并发日志写入与状态更新互相阻塞导致状态停在 running。
 - 工作流定时任务在 `schedules` 表中用负数 `script_id`（`-workflowId`）存储，`addScheduleJob` 统一处理正负数分发。
+- 删除脚本/工作流时必须同步移除关联 schedule 和内存 scheduler job；被工作流引用的脚本禁止直接删除。定时任务注册失败必须回滚数据库与旧 scheduler 状态。
+- 新建或有未保存修改的脚本/工作流不能运行；运行中不能删除或修改结构性配置。所有异步操作必须立即显示处理中状态并阻止重复提交。
 - 服务配置存储在 `services` 表；`auto_start=1` 表示跟随 PyLot 启动。`startup()` 在 DB 初始化和调度器加载后调用 `autoStartServices()` 拉起自启服务。
 - 服务运行态只保存在内存中，不落库；服务页通过 `ListServices()` 获取当前快照，通过 `GetServiceLogs()` 获取本次会话后端日志缓冲。
 - 服务命令使用 Windows 命令行规则解析，支持带空格路径和引号参数；相对可执行文件若能在 WorkDir 下找到，会解析为 WorkDir 相对路径，否则交给系统 PATH 查找。

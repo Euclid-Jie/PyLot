@@ -1,11 +1,11 @@
 <template>
   <div class="services-view">
-    <div class="sv-header">
+    <div class="sv-header ui-page-header">
       <div>
         <h2>服务管理</h2>
         <span class="sv-subtitle">{{ services.length }} 个服务</span>
       </div>
-      <button class="btn-primary" @click="openAdd">+ 新增服务</button>
+      <button class="ui-btn primary" @click="openAdd"><UiIcon name="add" />新增服务</button>
     </div>
 
     <div class="services-shell">
@@ -62,7 +62,7 @@
 
           <div v-if="formError" class="form-error">{{ formError }}</div>
           <div class="form-actions">
-            <button class="btn-primary" @click="submitForm">{{ editId ? '保存' : '创建' }}</button>
+            <button class="btn-primary" :disabled="formSaving" @click="submitForm">{{ formSaving ? '保存中...' : (editId ? '保存' : '创建') }}</button>
             <button class="btn-ghost" @click="closeForm">取消</button>
           </div>
         </div>
@@ -78,7 +78,7 @@
               <button v-else class="btn-sm btn-red" :disabled="!selected.running" @click="stop(selected.id)">停止</button>
               <button class="btn-sm" :disabled="selected.status === 'starting' || selected.status === 'stopping'" @click="restart(selected.id)">重启</button>
               <button class="btn-sm" @click="openEdit(selected)">编辑</button>
-              <button class="btn-sm btn-red" @click="del(selected.id)">删除</button>
+              <button class="btn-sm btn-red" @click="showDeleteId = selected.id">删除</button>
             </div>
           </div>
 
@@ -148,10 +148,11 @@
       </section>
     </div>
   </div>
+  <ConfirmDialog v-if="showDeleteId !== null" title="删除服务？" :message="`服务“${selected?.name || ''}”的配置将被删除，此操作无法撤销。`" @confirm="del(showDeleteId)" @cancel="showDeleteId = null" />
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime.js'
 import {
   AddService,
@@ -166,7 +167,11 @@ import {
   StopService,
   UpdateService,
 } from '../../wailsjs/go/main/App.js'
+import ConfirmDialog from './ConfirmDialog.vue'
+import UiIcon from './UiIcon.vue'
+import { useMainStore } from '../stores/main.js'
 
+const store = useMainStore()
 const services = ref([])
 const selectedId = ref(null)
 const showForm = ref(false)
@@ -176,9 +181,15 @@ const formError = ref('')
 const actionError = ref('')
 const logs = reactive({})
 const logEl = ref(null)
+const showDeleteId = ref(null)
+const formSaving = ref(false)
+let formHydrating = false
 
 const selected = computed(() => services.value.find(s => s.id === selectedId.value) || null)
 const currentLogs = computed(() => selectedId.value === null ? [] : (logs[selectedId.value] || []))
+watch(form, () => {
+  if (showForm.value && !formHydrating) store.markDirty()
+})
 
 const labels = {
   stopped: '已停止',
@@ -206,14 +217,17 @@ async function loadLogs(id) {
 }
 
 function openAdd() {
+  formHydrating = true
   editId.value = null
   Object.assign(form, { name: '', command: '', workDir: '', autoStart: false })
   formError.value = ''
   actionError.value = ''
   showForm.value = true
+  nextTick(() => { formHydrating = false })
 }
 
 function openEdit(s) {
+  formHydrating = true
   editId.value = s.id
   Object.assign(form, {
     name: s.name,
@@ -224,12 +238,14 @@ function openEdit(s) {
   formError.value = ''
   actionError.value = ''
   showForm.value = true
+  nextTick(() => { formHydrating = false })
 }
 
 function closeForm() {
   showForm.value = false
   editId.value = null
   formError.value = ''
+  store.clearDirty()
 }
 
 async function chooseWorkDir() {
@@ -238,11 +254,13 @@ async function chooseWorkDir() {
 }
 
 async function submitForm() {
+  if (formSaving.value) return
   if (!form.name || !form.command) {
     formError.value = '名称和命令不能为空'
     return
   }
 
+  formSaving.value = true
   try {
     const targetName = form.name
     const targetId = editId.value
@@ -252,12 +270,15 @@ async function submitForm() {
       await AddService(form.name, form.command, form.workDir, form.autoStart)
     }
     closeForm()
+    store.clearDirty()
     await load()
     if (targetId) selectedId.value = targetId
     else selectedId.value = services.value.find(s => s.name === targetName)?.id ?? selectedId.value
     if (selectedId.value !== null) await loadLogs(selectedId.value)
   } catch (e) {
     formError.value = normalizeError(e)
+  } finally {
+    formSaving.value = false
   }
 }
 
@@ -265,10 +286,11 @@ async function start(s) {
   actionError.value = ''
   selectedId.value = s.id
   ensureLogs(s.id)
+  Object.assign(s, { status: 'starting', running: false })
   try {
     await StartService(s.id)
-    await load()
   } catch (e) {
+    Object.assign(s, { status: 'failed', running: false })
     appendLocalLog(s.id, `启动失败: ${normalizeError(e)}`, true)
     actionError.value = normalizeError(e)
   }
@@ -276,38 +298,53 @@ async function start(s) {
 
 async function stop(id) {
   actionError.value = ''
+  const service = services.value.find(item => item.id === id)
+  if (service) service.status = 'stopping'
   try {
     await StopService(id)
   } catch (e) {
     actionError.value = normalizeError(e)
-  } finally {
-    setTimeout(load, 300)
+    if (service) service.status = service.running ? 'running' : 'failed'
   }
 }
 
 async function restart(id) {
   actionError.value = ''
+  const service = services.value.find(item => item.id === id)
+  if (service) service.status = 'stopping'
   try {
     await RestartService(id)
   } catch (e) {
     appendLocalLog(id, `重启失败: ${normalizeError(e)}`, true)
     actionError.value = normalizeError(e)
-  } finally {
-    setTimeout(load, 500)
   }
 }
 
 async function del(id) {
-  if (!confirm('确认删除此服务？')) return
-  await DeleteService(id)
-  delete logs[id]
-  if (selectedId.value === id) selectedId.value = null
-  await load()
+  showDeleteId.value = null
+  actionError.value = ''
+  try {
+    await DeleteService(id)
+    delete logs[id]
+    services.value = services.value.filter(service => service.id !== id)
+    if (selectedId.value === id) selectedId.value = services.value[0]?.id ?? null
+  } catch (e) {
+    actionError.value = normalizeError(e)
+  }
 }
 
 async function select(s) {
+  if (showForm.value && store.isDirty) {
+    store.requestNavigation(() => selectService(s))
+    return
+  }
+  await selectService(s)
+}
+
+async function selectService(s) {
   selectedId.value = s.id
   showForm.value = false
+  store.clearDirty()
   actionError.value = ''
   await loadLogs(s.id)
 }

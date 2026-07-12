@@ -1,161 +1,124 @@
 <template>
   <div class="sidebar-inner">
-    <!-- 脚本管理 header -->
-    <div class="sidebar-header">
-      <span>脚本管理</span>
-      <button class="btn-add" @click="newScript">+</button>
+    <div class="brand">
+      <div class="brand-mark">P</div>
+      <div><strong>PyLot</strong><span>脚本调度中心</span></div>
     </div>
 
-    <div v-for="cat in categories" :key="cat.key" class="category">
-      <div class="cat-header" @click="cat.open = !cat.open">
-        <span>{{ cat.icon }} {{ cat.label }}</span>
-        <span>{{ cat.open ? '▾' : '▸' }}</span>
-      </div>
-      <div v-if="cat.open" class="cat-scripts">
-        <div
-          v-for="s in scriptsByCategory(cat.key)"
-          :key="s.id"
-          class="script-item"
-          :class="{ active: store.selectedScriptID === s.id }"
-          @click="store.setScript(s.id)"
-        >
-          <span class="script-name">{{ s.name }}</span>
-          <span v-if="store.runningScripts.has(s.id)" class="spinner">⟳</span>
+    <nav class="primary-nav" aria-label="主要导航">
+      <button :class="{ active: store.currentView === 'schedule' }" @click="store.setView('schedule')"><UiIcon name="clock" /><span>定时任务</span></button>
+      <button :class="{ active: store.currentView === 'services' }" @click="store.setView('services')"><UiIcon name="server" /><span>服务</span></button>
+    </nav>
+
+    <div class="resource-header"><span>资源</span><button class="ui-icon-btn" aria-label="新建脚本" title="新建脚本" @click="newScript"><UiIcon name="add" /></button></div>
+    <div class="search-box">
+      <UiIcon name="search" :size="15" />
+      <input v-model.trim="query" aria-label="搜索脚本或工作流" placeholder="搜索脚本或工作流" />
+      <button v-if="query" aria-label="清除搜索" title="清除搜索" @click="query = ''"><UiIcon name="x" :size="13" /></button>
+    </div>
+
+    <div class="resource-scroll">
+      <section class="resource-section">
+        <button class="section-title" @click="scriptsOpen = !scriptsOpen"><UiIcon :name="scriptsOpen ? 'chevronDown' : 'chevronRight'" :size="14" /><span>脚本</span><strong>{{ filteredScripts.length }}</strong></button>
+        <div v-if="scriptsOpen">
+          <div v-for="category in visibleCategories" :key="category.key" class="category">
+            <button class="category-title" @click="category.open = !category.open"><UiIcon :name="category.open ? 'chevronDown' : 'chevronRight'" :size="13" /><span>{{ category.label }}</span><strong>{{ scriptsByCategory(category.key).length }}</strong></button>
+            <div v-if="category.open">
+              <button v-for="script in scriptsByCategory(category.key)" :key="script.id" class="resource-item" :class="{ active: store.selectedScriptID === script.id && store.currentView === 'script' }" :title="script.name" @click="store.setScript(script.id)">
+                <UiIcon name="file" :size="15" /><span>{{ script.name }}</span><i v-if="store.runningScripts.has(script.id)" class="running-dot"></i>
+              </button>
+            </div>
+          </div>
+          <div v-if="!filteredScripts.length" class="resource-empty">没有匹配的脚本</div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <!-- 工作流管理 header -->
-    <div class="sidebar-header wf-header-section">
-      <span>工作流</span>
-      <button class="btn-add" @click="newWorkflow">+</button>
-    </div>
-
-    <div class="category">
-      <div class="cat-scripts">
-        <div
-          v-for="w in allWorkflows"
-          :key="'wf-' + w.id"
-          class="script-item"
-          :class="{ active: store.selectedWorkflowId === w.id && store.currentView === 'workflow' }"
-          @click="store.openWorkflow(w.id)"
-        >
-          <span class="script-name">{{ w.name }}</span>
-          <span v-if="store.runningScripts.has(-w.id)" class="spinner">⟳</span>
+      <section class="resource-section">
+        <div class="section-title-row">
+          <button class="section-title" @click="workflowsOpen = !workflowsOpen"><UiIcon :name="workflowsOpen ? 'chevronDown' : 'chevronRight'" :size="14" /><span>工作流</span><strong>{{ filteredWorkflows.length }}</strong></button>
+          <button class="ui-icon-btn compact" aria-label="新建工作流" title="新建工作流" @click="newWorkflow"><UiIcon name="add" /></button>
         </div>
-      </div>
+        <div v-if="workflowsOpen">
+          <button v-for="workflow in filteredWorkflows" :key="workflow.id" class="resource-item" :class="{ active: store.selectedWorkflowId === workflow.id && store.currentView === 'workflow' }" :title="workflow.name" @click="store.openWorkflow(workflow.id)">
+            <UiIcon name="flow" :size="15" /><span>{{ workflow.name }}</span><i v-if="store.runningScripts.has(-workflow.id)" class="running-dot"></i>
+          </button>
+          <div v-if="!filteredWorkflows.length" class="resource-empty">没有匹配的工作流</div>
+        </div>
+      </section>
     </div>
 
-    <div class="sidebar-footer">
-      <div class="footer-row">
-        <button class="btn-footer" :class="{ active: store.currentView === 'services' }" @click="store.setView('services')">🖥 服务</button>
-        <button class="btn-footer" :class="{ active: store.currentView === 'schedule' }" @click="store.setView('schedule')">📅</button>
-        <button class="btn-footer btn-settings" :class="{ active: store.currentView === 'settings' }" @click="store.setView('settings')">⚙️</button>
-      </div>
-    </div>
+    <footer><button :class="{ active: store.currentView === 'settings' }" @click="store.setView('settings')"><UiIcon name="settings" /><span>设置</span></button></footer>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { GetScripts, GetWorkflows } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
+import UiIcon from './UiIcon.vue'
 
 const store = useMainStore()
 const allScripts = ref([])
 const allWorkflows = ref([])
-
+const query = ref('')
+const scriptsOpen = ref(true)
+const workflowsOpen = ref(true)
 const categories = ref([
-  { key: 'crawler', label: '数据爬取上传', icon: '🕷', open: true },
-  { key: 'processor', label: '数据处理', icon: '⚙️', open: true },
-  { key: 'tool', label: '个人工具', icon: '🔧', open: true },
+  { key: 'crawler', label: '数据爬取上传', open: true },
+  { key: 'processor', label: '数据处理', open: true },
+  { key: 'tool', label: '个人工具', open: true },
 ])
 
-onMounted(async () => {
-  await loadScripts()
-  allWorkflows.value = await GetWorkflows() || []
-})
+const normalizedQuery = computed(() => query.value.toLocaleLowerCase())
+const filteredScripts = computed(() => allScripts.value.filter(item => item.name.toLocaleLowerCase().includes(normalizedQuery.value)))
+const filteredWorkflows = computed(() => allWorkflows.value.filter(item => item.name.toLocaleLowerCase().includes(normalizedQuery.value)))
+const visibleCategories = computed(() => categories.value.filter(category => scriptsByCategory(category.key).length || !query.value))
 
-watch(() => store.scriptListVersion, async () => {
-  await loadScripts()
-  allWorkflows.value = await GetWorkflows() || []
-})
-
-async function loadScripts() {
-  allScripts.value = await GetScripts() || []
+onMounted(loadResources)
+watch(() => store.scriptListVersion, loadResources)
+async function loadResources() {
+  const [scripts, workflows] = await Promise.all([GetScripts(), GetWorkflows()])
+  allScripts.value = scripts || []
+  allWorkflows.value = workflows || []
 }
-
-function scriptsByCategory(cat) {
-  return allScripts.value.filter(s => s.category === cat)
-}
-
-function newScript() {
-  store.setScript(0)
-}
-
-function newWorkflow() {
-  store.newWorkflow()
-}
+function scriptsByCategory(category) { return filteredScripts.value.filter(script => script.category === category) }
+function newScript() { store.setScript(0) }
+function newWorkflow() { store.newWorkflow() }
 </script>
 
 <style scoped>
-.sidebar-inner { display: flex; flex-direction: column; height: 100%; }
-
-.sidebar-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 16px 16px 8px;
-  font-size: 12px; font-weight: 600; color: var(--text-muted);
-  letter-spacing: .04em; text-transform: uppercase;
-}
-.wf-header-section { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 16px; }
-
-.btn-add {
-  width: 22px; height: 22px; border-radius: var(--radius-sm); border: none;
-  background: transparent; color: var(--text-muted);
-  font-size: 18px; line-height: 1; display: flex; align-items: center; justify-content: center;
-  transition: background .12s, color .12s;
-}
-.btn-add:hover { background: var(--surface2); color: var(--text); }
-
-.cat-header {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 5px 16px; font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase;
-  color: var(--text-muted); background: var(--surface2);
-  cursor: pointer; user-select: none; transition: background .12s, color .12s;
-  border-top: 1px solid var(--border);
-}
-.cat-header:hover { background: var(--surface); color: var(--text-dim); }
-
-.cat-scripts { padding: 2px 0 6px; }
-
-.script-item {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 7px 16px 7px 20px;
-  font-size: 14px; cursor: pointer; color: var(--text-dim);
-  border-left: 2px solid transparent;
-  transition: background .1s, color .1s, border-color .1s;
-  white-space: nowrap;
-}
-.script-item:hover { background: var(--surface); color: var(--text); }
-.script-item.active {
-  background: var(--accent-dim); color: var(--accent);
-  border-left-color: var(--accent); font-weight: 500;
-}
-
-.script-name { overflow: hidden; text-overflow: ellipsis; }
-.spinner { animation: spin 1s linear infinite; display: inline-block; color: var(--green); font-size: 13px; flex-shrink: 0; margin-left: 4px; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-.sidebar-footer { margin-top: auto; padding: 12px; border-top: 1px solid var(--border); }
-.footer-row { display: flex; gap: 6px; }
-.btn-footer {
-  flex: 1; padding: 7px 8px;
-  background: transparent; color: var(--text-dim);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  font-size: 13px; font-weight: 500;
-  transition: background .12s, color .12s, border-color .12s;
-}
-.btn-footer:hover { background: var(--surface2); color: var(--text); border-color: var(--text-muted); }
-.btn-footer.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
-.btn-settings { flex: 0 0 36px; }
+.sidebar-inner { height: 100%; display: flex; flex-direction: column; }
+.brand { min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
+.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; }
+.brand strong, .brand span { display: block; }
+.brand strong { color: var(--text); font-size: 14px; font-weight: 600; }
+.brand span { margin-top: 1px; color: var(--text-muted); font-size: 12px; }
+.primary-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 10px 4px; }
+.primary-nav button, footer button { min-height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-dim); font-size: 13px; text-align: left; }
+.primary-nav button:hover, footer button:hover { background: var(--surface-hover); color: var(--text); }
+.primary-nav button.active, footer button.active { border-color: rgba(59, 130, 246, .28); background: var(--accent-dim); color: var(--accent); }
+.resource-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 12px 7px 14px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.resource-header .ui-icon-btn, .compact { width: 26px; height: 26px; }
+.search-box { height: 32px; display: flex; align-items: center; gap: 7px; margin: 0 10px 8px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text-muted); }
+.search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
+.search-box button { display: grid; place-items: center; border: 0; background: transparent; color: var(--text-muted); }
+.resource-scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.resource-section + .resource-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
+.section-title-row { display: flex; align-items: center; }
+.section-title-row .section-title { flex: 1; }
+.section-title, .category-title { width: 100%; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--text-dim); text-align: left; }
+.section-title { min-height: 30px; padding: 0 6px; font-size: 12px; font-weight: 600; }
+.category-title { min-height: 28px; padding: 0 8px 0 16px; color: var(--text-muted); font-size: 12px; }
+.section-title:hover, .category-title:hover { color: var(--text); }
+.section-title strong, .category-title strong { color: var(--text-muted); font-size: 11px; font-weight: 500; }
+.resource-item { width: 100%; min-height: 32px; display: grid; grid-template-columns: 18px minmax(0, 1fr) 10px; align-items: center; gap: 7px; margin: 1px 0; padding: 0 8px 0 20px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-dim); font-size: 13px; text-align: left; }
+.resource-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.resource-item:hover { background: var(--surface-hover); color: var(--text); }
+.resource-item.active { border-color: rgba(59, 130, 246, .22); background: var(--accent-dim); color: var(--accent); }
+.running-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-dim); animation: pulse 1.5s ease-in-out infinite; }
+.resource-empty { padding: 10px 20px; color: var(--text-muted); font-size: 12px; }
+footer { padding: 9px 10px; border-top: 1px solid var(--border); }
+footer button { width: 100%; }
+@keyframes pulse { 50% { opacity: .45; } }
 </style>

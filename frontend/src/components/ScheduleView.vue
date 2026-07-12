@@ -1,7 +1,7 @@
 <template>
   <div class="schedule-view">
     <section class="schedule-card">
-      <div class="view-header">
+      <div class="view-header ui-page-header">
         <div>
           <h2>定时任务总览</h2>
           <span>{{ overview.length }} 个定时任务 · {{ filteredOverview.length }} 个当前显示</span>
@@ -18,7 +18,7 @@
               <span>{{ option.count }}</span>
             </button>
           </div>
-          <button class="btn-add" @click="openAdd">新增定时</button>
+          <button class="ui-btn primary" @click="openAdd"><UiIcon name="add" />新增定时</button>
         </div>
       </div>
 
@@ -51,14 +51,14 @@
               <td><code>{{ item.cronExpr }}</code></td>
               <td>{{ fmtTime(item.nextRun, item.enabled) }}</td>
               <td>
-                <button :class="['btn-toggle', item.enabled ? 'on' : 'off']" @click="toggle(item)">
-                  {{ item.enabled ? '启用' : '禁用' }}
+                <button :class="['btn-toggle', item.enabled ? 'on' : 'off']" :disabled="pendingScheduleIds.includes(item.scheduleId)" @click="toggle(item)">
+                  {{ pendingScheduleIds.includes(item.scheduleId) ? '处理中' : (item.enabled ? '启用' : '禁用') }}
                 </button>
               </td>
               <td>
                 <div class="actions">
                   <button class="btn-edit" @click="openEdit(item)">编辑</button>
-                  <button class="btn-del" @click="del(item.scheduleId)">删除</button>
+                  <button class="btn-del" :disabled="pendingScheduleIds.includes(item.scheduleId)" @click="showDeleteId = item.scheduleId">删除</button>
                 </div>
               </td>
             </tr>
@@ -118,9 +118,10 @@
       :schedule="editingSchedule"
       :allow-target-select="true"
       :existing-schedules="overview"
-      @saved="load"
+      @saved="handleTimerSaved"
       @close="closeTimer"
     />
+    <ConfirmDialog v-if="showDeleteId !== null" title="删除定时任务？" message="该定时规则将被永久删除，此操作无法撤销。" @confirm="del(showDeleteId)" @cancel="showDeleteId = null" />
   </div>
 </template>
 
@@ -128,6 +129,8 @@
 import { computed, ref, onMounted, onUnmounted } from 'vue'
 import { DeleteSchedule, GetRunDetail, GetRunHistory, GetScheduleOverview, GetWorkflowRuns, ToggleSchedule } from '../../wailsjs/go/main/App.js'
 import TimerModal from './TimerModal.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
+import UiIcon from './UiIcon.vue'
 
 const overview = ref([])
 const history = ref([])
@@ -139,6 +142,8 @@ const showTimer = ref(false)
 const editingSchedule = ref(null)
 const timerScriptId = ref(0)
 const scheduleFilter = ref('upcoming')
+const showDeleteId = ref(null)
+const pendingScheduleIds = ref([])
 let timer = null
 
 const sortedOverview = computed(() => [...overview.value].sort(compareSchedule))
@@ -152,13 +157,13 @@ const filterOptions = computed(() => [
 
 onMounted(async () => {
   await load()
-  timer = setInterval(load, 60000)
+  timer = setInterval(loadOverview, 60000)
 })
 onUnmounted(() => clearInterval(timer))
 
 async function load() {
   const items = await loadOverview()
-  await loadHistory(items)
+  void loadHistory(items)
 }
 
 async function loadOverview() {
@@ -339,33 +344,49 @@ function openEdit(item) {
   showTimer.value = true
 }
 
-async function closeTimer() {
+function closeTimer() {
   showTimer.value = false
   editingSchedule.value = null
   timerScriptId.value = 0
-  await load()
+}
+
+async function handleTimerSaved() {
+  await loadOverview()
 }
 
 async function toggle(item) {
+  if (pendingScheduleIds.value.includes(item.scheduleId)) return
+  const previous = item.enabled
+  item.enabled = !previous
+  pendingScheduleIds.value.push(item.scheduleId)
   try {
     errorMsg.value = ''
-    await ToggleSchedule(item.scheduleId, !item.enabled)
-    await loadOverview()
+    await ToggleSchedule(item.scheduleId, item.enabled)
+    const refreshed = await GetScheduleOverview() || []
+    const latest = refreshed.find(entry => entry.scheduleId === item.scheduleId)
+    if (latest) Object.assign(item, latest)
   } catch (err) {
+    item.enabled = previous
     errorMsg.value = formatError(err)
     setTimeout(() => { errorMsg.value = '' }, 3000)
+  } finally {
+    pendingScheduleIds.value = pendingScheduleIds.value.filter(id => id !== item.scheduleId)
   }
 }
 
 async function del(id) {
-  if (!confirm('确认删除此定时任务？')) return
+  showDeleteId.value = null
+  if (pendingScheduleIds.value.includes(id)) return
+  pendingScheduleIds.value.push(id)
   try {
     errorMsg.value = ''
     await DeleteSchedule(id)
-    await load()
+    overview.value = overview.value.filter(item => item.scheduleId !== id)
   } catch (err) {
     errorMsg.value = formatError(err)
     setTimeout(() => { errorMsg.value = '' }, 3000)
+  } finally {
+    pendingScheduleIds.value = pendingScheduleIds.value.filter(scheduleID => scheduleID !== id)
   }
 }
 

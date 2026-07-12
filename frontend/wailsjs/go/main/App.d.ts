@@ -30,9 +30,13 @@ export function GetRunHistory(arg1:number):Promise<Array<db.RunRecord>>;
 
 export function GetRunningScripts():Promise<Array<number>>;
 
+export function GetRunningWorkflows():Promise<Array<number>>;
+
 export function GetScheduleOverview():Promise<Array<scheduler.ScheduleInfo>>;
 
 export function GetSchedules():Promise<Array<db.Schedule>>;
+
+export function GetScript(arg1:number):Promise<db.Script>;
 
 export function GetScripts():Promise<Array<db.Script>>;
 
@@ -77,6 +81,8 @@ export function StartService(arg1:number):Promise<void>;
 export function StopScript(arg1:number):Promise<void>;
 
 export function StopService(arg1:number):Promise<void>;
+
+export function StopWorkflow(arg1:number):Promise<void>;
 
 export function ToggleSchedule(arg1:number,arg2:boolean):Promise<void>;
 

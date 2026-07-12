@@ -32,6 +32,66 @@ type Graph struct {
 type StatusCallback func(workflowRunID int, nodeID string, scriptID int, status string)
 type LogCallback func(scriptID int, line string, isError bool)
 
+func ParseGraph(raw string) (Graph, error) {
+	var g Graph
+	if err := json.Unmarshal([]byte(raw), &g); err != nil {
+		return g, fmt.Errorf("invalid graph: %w", err)
+	}
+	if len(g.Nodes) == 0 {
+		return g, fmt.Errorf("workflow requires at least one node")
+	}
+
+	nodeIDs := make(map[string]struct{}, len(g.Nodes))
+	inDegree := make(map[string]int, len(g.Nodes))
+	successors := make(map[string][]string, len(g.Nodes))
+	for _, node := range g.Nodes {
+		if node.ID == "" {
+			return g, fmt.Errorf("workflow contains a node without an id")
+		}
+		if _, exists := nodeIDs[node.ID]; exists {
+			return g, fmt.Errorf("workflow contains duplicate node id %s", node.ID)
+		}
+		if _, err := script.GetByID(node.ScriptID); err != nil {
+			return g, fmt.Errorf("workflow node %s references a missing script", node.ID)
+		}
+		nodeIDs[node.ID] = struct{}{}
+		inDegree[node.ID] = 0
+	}
+	for _, edge := range g.Edges {
+		if _, ok := nodeIDs[edge.Source]; !ok {
+			return g, fmt.Errorf("workflow edge references missing source node %s", edge.Source)
+		}
+		if _, ok := nodeIDs[edge.Target]; !ok {
+			return g, fmt.Errorf("workflow edge references missing target node %s", edge.Target)
+		}
+		successors[edge.Source] = append(successors[edge.Source], edge.Target)
+		inDegree[edge.Target]++
+	}
+
+	ready := make([]string, 0, len(g.Nodes))
+	for id, degree := range inDegree {
+		if degree == 0 {
+			ready = append(ready, id)
+		}
+	}
+	visited := 0
+	for len(ready) > 0 {
+		id := ready[0]
+		ready = ready[1:]
+		visited++
+		for _, successor := range successors[id] {
+			inDegree[successor]--
+			if inDegree[successor] == 0 {
+				ready = append(ready, successor)
+			}
+		}
+	}
+	if visited != len(g.Nodes) {
+		return g, fmt.Errorf("workflow graph contains a cycle")
+	}
+	return g, nil
+}
+
 // Run executes a workflow. onStatus is called on each node status change.
 func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus StatusCallback, onLog LogCallback) error {
 	var wf db.Workflow
@@ -40,9 +100,9 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 		return fmt.Errorf("workflow not found: %w", err)
 	}
 
-	var g Graph
-	if err := json.Unmarshal([]byte(wf.Graph), &g); err != nil {
-		return fmt.Errorf("invalid graph: %w", err)
+	g, err := ParseGraph(wf.Graph)
+	if err != nil {
+		return err
 	}
 
 	// Create workflow run record
@@ -85,6 +145,10 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 	globalEnv, _ := env.LoadGlobalEnv(globalEnvPath)
 
 	for len(ready) > 0 {
+		if err := ctx.Err(); err != nil {
+			finishWorkflow("killed")
+			return err
+		}
 		mu.Lock()
 		if failed {
 			mu.Unlock()
@@ -111,6 +175,10 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 			}(nodeID, node)
 		}
 		wg.Wait()
+		if err := ctx.Err(); err != nil {
+			finishWorkflow("killed")
+			return err
+		}
 
 		if layerFailed {
 			mu.Lock()
@@ -207,6 +275,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	case <-ctx.Done():
 		script.MarkKilled(int(recordID))
 		script.StopScript(n.ScriptID)
+		onStatus(runID, nodeID, n.ScriptID, "killed")
 		return ctx.Err()
 	}
 }

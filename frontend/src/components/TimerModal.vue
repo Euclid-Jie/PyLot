@@ -6,7 +6,7 @@
           <div class="eyebrow">Schedule</div>
           <h3 id="timer-title">{{ isEditing ? '编辑定时规则' : '定时规则配置' }}</h3>
         </div>
-        <button class="icon-btn" title="关闭" @click="emit('close')">×</button>
+        <button class="ui-icon-btn" title="关闭" aria-label="关闭" @click="emit('close')"><UiIcon name="x" /></button>
       </header>
 
       <div class="modal-body">
@@ -136,6 +136,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { GetScripts, GetWorkflows, SaveSchedule } from '../../wailsjs/go/main/App.js'
+import UiIcon from './UiIcon.vue'
 
 const props = defineProps({
   scriptId: { type: Number, default: 0 },
@@ -413,7 +414,7 @@ async function handleSave() {
       toast.value = generatedCrons.value.length > 1 ? `已保存 ${generatedCrons.value.length} 条定时规则` : '定时设置成功'
     }
     emit('saved')
-    setTimeout(() => emit('close'), 900)
+    setTimeout(() => emit('close'), 300)
   } catch (err) {
     actionError.value = formatError(err)
   } finally {
