@@ -13,7 +13,6 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
-	"golang.org/x/sys/windows"
 )
 
 //go:embed all:frontend/dist
@@ -26,14 +25,7 @@ var trayIcon []byte
 var trayIconBusy []byte
 
 func main() {
-	// 防多开：命名 mutex
-	name, _ := windows.UTF16PtrFromString("PyLot_SingleInstance")
-	h, err := windows.CreateMutex(nil, false, name)
-	if err != nil || windows.GetLastError() == windows.ERROR_ALREADY_EXISTS {
-		return
-	}
-	defer windows.CloseHandle(h)
-
+	// Wails 单实例锁会把后续启动请求转发给当前实例。
 	app := NewApp()
 	ctxReady := make(chan struct{})
 
@@ -75,10 +67,17 @@ func main() {
 		}, nil)
 	}()
 
-	err = wails.Run(&options.App{
+	err := wails.Run(&options.App{
 		Title:  "PyLot",
 		Width:  1280,
 		Height: 800,
+		SingleInstanceLock: &options.SingleInstanceLock{
+			UniqueId: "pylot-single-instance",
+			OnSecondInstanceLaunch: func(_ options.SecondInstanceData) {
+				<-ctxReady
+				runtime.WindowShow(app.ctx)
+			},
+		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

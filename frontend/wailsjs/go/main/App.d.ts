@@ -4,7 +4,7 @@ import {db} from '../models';
 import {scheduler} from '../models';
 import {main} from '../models';
 
-export function AddService(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+export function AddService(arg1:string,arg2:string,arg3:string,arg4:boolean,arg5:number,arg6:string):Promise<void>;
 
 export function ClearServiceLogs(arg1:number):Promise<void>;
 
@@ -43,6 +43,8 @@ export function GetScripts():Promise<Array<db.Script>>;
 export function GetScriptsByCategory(arg1:string):Promise<Array<db.Script>>;
 
 export function GetServiceLogs(arg1:number):Promise<Array<main.ServiceLogEntry>>;
+
+export function GetServicePortStatus(arg1:number):Promise<main.ServicePortStatus>;
 
 export function GetWindowSize():Promise<number|number>;
 
@@ -84,8 +86,10 @@ export function StopService(arg1:number):Promise<void>;
 
 export function StopWorkflow(arg1:number):Promise<void>;
 
+export function TerminatePortOwnerAndStartService(arg1:number,arg2:number):Promise<void>;
+
 export function ToggleSchedule(arg1:number,arg2:boolean):Promise<void>;
 
 export function UpdateScript(arg1:db.Script):Promise<void>;
 
-export function UpdateService(arg1:number,arg2:string,arg3:string,arg4:string,arg5:boolean):Promise<void>;
+export function UpdateService(arg1:number,arg2:string,arg3:string,arg4:string,arg5:boolean,arg6:number,arg7:string):Promise<void>;

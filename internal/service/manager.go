@@ -210,6 +210,19 @@ func IsRunning(id int64) bool {
 	return ensureStateLocked(id).cmd != nil
 }
 
+func WaitStopped(id int64, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if !IsRunning(id) {
+			return nil
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("service did not stop within %s", timeout)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
 func Forget(id int64) {
 	mu.Lock()
 	delete(states, id)

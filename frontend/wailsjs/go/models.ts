@@ -286,6 +286,9 @@ export namespace main {
 	    command: string;
 	    work_dir: string;
 	    auto_start: boolean;
+	    port: number;
+	    protocol: string;
+	    url: string;
 	    running: boolean;
 	    status: string;
 	    pid: number;
@@ -305,6 +308,9 @@ export namespace main {
 	        this.command = source["command"];
 	        this.work_dir = source["work_dir"];
 	        this.auto_start = source["auto_start"];
+	        this.port = source["port"];
+	        this.protocol = source["protocol"];
+	        this.url = source["url"];
 	        this.running = source["running"];
 	        this.status = source["status"];
 	        this.pid = source["pid"];
@@ -330,6 +336,36 @@ export namespace main {
 	        this.line = source["line"];
 	        this.isError = source["isError"];
 	        this.timestamp = source["timestamp"];
+	    }
+	}
+	export class ServicePortStatus {
+	    configured: boolean;
+	    port: number;
+	    protocol: string;
+	    url: string;
+	    listening: boolean;
+	    pid: number;
+	    process_name: string;
+	    process_path: string;
+	    managed_service_id: number;
+	    managed_service_name: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ServicePortStatus(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.configured = source["configured"];
+	        this.port = source["port"];
+	        this.protocol = source["protocol"];
+	        this.url = source["url"];
+	        this.listening = source["listening"];
+	        this.pid = source["pid"];
+	        this.process_name = source["process_name"];
+	        this.process_path = source["process_path"];
+	        this.managed_service_id = source["managed_service_id"];
+	        this.managed_service_name = source["managed_service_name"];
 	    }
 	}
 
@@ -380,4 +416,3 @@ export namespace scheduler {
 	}
 
 }
-

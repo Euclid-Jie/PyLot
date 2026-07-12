@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -713,6 +714,9 @@ type ServiceInfo struct {
 	Command   string `json:"command"`
 	WorkDir   string `json:"work_dir"`
 	AutoStart bool   `json:"auto_start"`
+	Port      int    `json:"port"`
+	Protocol  string `json:"protocol"`
+	URL       string `json:"url"`
 	Running   bool   `json:"running"`
 	Status    string `json:"status"`
 	PID       int    `json:"pid"`
@@ -720,6 +724,19 @@ type ServiceInfo struct {
 	StoppedAt string `json:"stopped_at"`
 	ExitCode  int    `json:"exit_code"`
 	LastError string `json:"last_error"`
+}
+
+type ServicePortStatus struct {
+	Configured         bool   `json:"configured"`
+	Port               int    `json:"port"`
+	Protocol           string `json:"protocol"`
+	URL                string `json:"url"`
+	Listening          bool   `json:"listening"`
+	PID                int    `json:"pid"`
+	ProcessName        string `json:"process_name"`
+	ProcessPath        string `json:"process_path"`
+	ManagedServiceID   int64  `json:"managed_service_id"`
+	ManagedServiceName string `json:"managed_service_name"`
 }
 
 type ServiceLogEntry struct {
@@ -747,7 +764,7 @@ func (a *App) autoStartServices() {
 }
 
 func (a *App) ListServices() []ServiceInfo {
-	rows, err := db.DB.Query(`SELECT id,name,command,work_dir,auto_start FROM services ORDER BY id`)
+	rows, err := db.DB.Query(`SELECT id,name,command,work_dir,auto_start,port,protocol FROM services ORDER BY id`)
 	if err != nil {
 		return []ServiceInfo{}
 	}
@@ -756,8 +773,9 @@ func (a *App) ListServices() []ServiceInfo {
 	for rows.Next() {
 		var s ServiceInfo
 		var autoStart int
-		rows.Scan(&s.ID, &s.Name, &s.Command, &s.WorkDir, &autoStart)
+		rows.Scan(&s.ID, &s.Name, &s.Command, &s.WorkDir, &autoStart, &s.Port, &s.Protocol)
 		s.AutoStart = autoStart == 1
+		s.URL = serviceURL(s.Protocol, s.Port)
 		a.applyServiceSnapshot(&s, svc.SnapshotFor(s.ID))
 		list = append(list, s)
 	}
@@ -782,23 +800,31 @@ func (a *App) ClearServiceLogs(id int64) {
 	svc.ClearLogs(id)
 }
 
-func (a *App) AddService(name, command, workDir string, autoStart bool) error {
+func (a *App) AddService(name, command, workDir string, autoStart bool, port int, protocol string) error {
+	protocol, err := validateServiceEndpoint(port, protocol)
+	if err != nil {
+		return err
+	}
 	auto := 0
 	if autoStart {
 		auto = 1
 	}
-	_, err := db.DB.Exec(`INSERT INTO services(name,command,work_dir,auto_start,created_at) VALUES(?,?,?,?,?)`,
-		name, command, workDir, auto, time.Now())
+	_, err = db.DB.Exec(`INSERT INTO services(name,command,work_dir,auto_start,port,protocol,created_at) VALUES(?,?,?,?,?,?,?)`,
+		name, command, workDir, auto, port, protocol, time.Now())
 	return err
 }
 
-func (a *App) UpdateService(id int64, name, command, workDir string, autoStart bool) error {
+func (a *App) UpdateService(id int64, name, command, workDir string, autoStart bool, port int, protocol string) error {
+	protocol, err := validateServiceEndpoint(port, protocol)
+	if err != nil {
+		return err
+	}
 	auto := 0
 	if autoStart {
 		auto = 1
 	}
-	_, err := db.DB.Exec(`UPDATE services SET name=?,command=?,work_dir=?,auto_start=? WHERE id=?`,
-		name, command, workDir, auto, id)
+	_, err = db.DB.Exec(`UPDATE services SET name=?,command=?,work_dir=?,auto_start=?,port=?,protocol=? WHERE id=?`,
+		name, command, workDir, auto, port, protocol, id)
 	return err
 }
 
@@ -820,10 +846,20 @@ func (a *App) DeleteService(id int64) error {
 }
 
 func (a *App) StartService(id int64) error {
-	row := db.DB.QueryRow(`SELECT command,work_dir FROM services WHERE id=?`, id)
+	row := db.DB.QueryRow(`SELECT command,work_dir,port FROM services WHERE id=?`, id)
 	var command, workDir string
-	if err := row.Scan(&command, &workDir); err != nil {
+	var port int
+	if err := row.Scan(&command, &workDir, &port); err != nil {
 		return err
+	}
+	if port > 0 {
+		owner, err := svc.FindPortOwner(port)
+		if err != nil {
+			return err
+		}
+		if owner != nil {
+			return fmt.Errorf("端口 %d 已被 PID %d 占用", port, owner.PID)
+		}
 	}
 	err := svc.Start(id, command, workDir, svc.Callbacks{
 		OnLog: func(entry svc.LogEntry) {
@@ -848,13 +884,101 @@ func (a *App) StopService(id int64) error {
 }
 
 func (a *App) RestartService(id int64) error {
+	wasRunning := svc.IsRunning(id)
 	snap, err := svc.Stop(id)
 	a.emitServiceStatus(snap)
 	if err != nil {
 		return err
 	}
-	time.Sleep(200 * time.Millisecond)
+	if wasRunning {
+		if err := svc.WaitStopped(id, 5*time.Second); err != nil {
+			return err
+		}
+		var port int
+		if err := db.DB.QueryRow(`SELECT port FROM services WHERE id=?`, id).Scan(&port); err != nil {
+			return err
+		}
+		if port > 0 {
+			if err := svc.WaitPortFree(port, 5*time.Second); err != nil {
+				return err
+			}
+		}
+	}
 	return a.StartService(id)
+}
+
+func (a *App) GetServicePortStatus(id int64) (ServicePortStatus, error) {
+	var port int
+	var protocol string
+	if err := db.DB.QueryRow(`SELECT port,protocol FROM services WHERE id=?`, id).Scan(&port, &protocol); err != nil {
+		return ServicePortStatus{}, err
+	}
+	status := ServicePortStatus{
+		Configured: port > 0,
+		Port:       port,
+		Protocol:   protocol,
+		URL:        serviceURL(protocol, port),
+	}
+	if port == 0 {
+		return status, nil
+	}
+	owner, err := svc.FindPortOwner(port)
+	if err != nil {
+		return ServicePortStatus{}, err
+	}
+	if owner == nil {
+		return status, nil
+	}
+	status.Listening = true
+	status.PID = owner.PID
+	status.ProcessName = owner.ProcessName
+	status.ProcessPath = owner.ProcessPath
+	for _, item := range a.ListServices() {
+		if item.PID == owner.PID {
+			status.ManagedServiceID = item.ID
+			status.ManagedServiceName = item.Name
+			break
+		}
+	}
+	return status, nil
+}
+
+func (a *App) TerminatePortOwnerAndStartService(id int64, expectedPID int) error {
+	var port int
+	if err := db.DB.QueryRow(`SELECT port FROM services WHERE id=?`, id).Scan(&port); err != nil {
+		return err
+	}
+	if port == 0 {
+		return fmt.Errorf("服务未配置端口")
+	}
+	if err := svc.KillPortOwner(port, expectedPID); err != nil {
+		return err
+	}
+	return a.StartService(id)
+}
+
+func validateServiceEndpoint(port int, protocol string) (string, error) {
+	if port < 0 || port > 65535 {
+		return "", fmt.Errorf("端口必须在 1-65535 之间，留空表示不管理端口")
+	}
+	protocol = strings.ToLower(strings.TrimSpace(protocol))
+	if protocol == "" {
+		protocol = "http"
+	}
+	if protocol != "http" && protocol != "https" {
+		return "", fmt.Errorf("协议只支持 http 或 https")
+	}
+	return protocol, nil
+}
+
+func serviceURL(protocol string, port int) string {
+	if port == 0 {
+		return ""
+	}
+	if protocol == "" {
+		protocol = "http"
+	}
+	return fmt.Sprintf("%s://127.0.0.1:%d", protocol, port)
 }
 
 func (a *App) applyServiceSnapshot(s *ServiceInfo, snap svc.Snapshot) {

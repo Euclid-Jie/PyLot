@@ -92,12 +92,16 @@ func createTables() error {
 		command TEXT NOT NULL,
 		work_dir TEXT NOT NULL DEFAULT '',
 		auto_start INTEGER NOT NULL DEFAULT 0,
+		port INTEGER NOT NULL DEFAULT 0,
+		protocol TEXT NOT NULL DEFAULT 'http',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	`)
 	// Migrations: ignore errors if columns already exist
 	DB.Exec(`ALTER TABLE global_config ADD COLUMN lark_cli_path TEXT DEFAULT ''`)
 	DB.Exec(`ALTER TABLE global_config ADD COLUMN lark_open_id TEXT DEFAULT ''`)
+	DB.Exec(`ALTER TABLE services ADD COLUMN port INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`ALTER TABLE services ADD COLUMN protocol TEXT NOT NULL DEFAULT 'http'`)
 	return err
 }
 

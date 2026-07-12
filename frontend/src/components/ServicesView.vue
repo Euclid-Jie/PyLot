@@ -55,6 +55,20 @@
             </div>
           </label>
 
+          <div class="endpoint-fields">
+            <label class="field">
+              <span>访问协议</span>
+              <select v-model="form.protocol" class="inp">
+                <option value="http">HTTP</option>
+                <option value="https">HTTPS</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>访问端口（可选）</span>
+              <input v-model="form.port" class="inp" type="number" min="1" max="65535" placeholder="8000" />
+            </label>
+          </div>
+
           <label class="toggle-row">
             <input type="checkbox" v-model="form.autoStart" />
             <span>PyLot 启动时自动运行</span>
@@ -92,6 +106,20 @@
             <div>
               <span>工作目录</span>
               <code>{{ selected.work_dir || '未设置' }}</code>
+            </div>
+            <div v-if="selected.port">
+              <span>访问地址</span>
+              <div class="address-row">
+                <code>{{ selected.url }}</code>
+                <button class="btn-ghost btn-xs icon-text-btn" @click="openServiceURL(selected.url)"><UiIcon name="externalLink" :size="13" />打开</button>
+              </div>
+            </div>
+            <div v-if="selected.port">
+              <span>端口状态</span>
+              <div class="port-status-row">
+                <strong :class="{ 'port-listening': selectedPortStatus?.listening }">{{ portStatusLabel }}</strong>
+                <button class="icon-btn-xs" title="刷新端口状态" @click="loadPortStatus(selected.id)"><UiIcon name="refresh" :size="13" /></button>
+              </div>
             </div>
             <div>
               <span>PID</span>
@@ -148,23 +176,47 @@
       </section>
     </div>
   </div>
+  <div v-if="portConflict" class="modal-overlay" @click.self="closePortConflict">
+    <div class="conflict-dialog" role="dialog" aria-modal="true" aria-labelledby="port-conflict-title">
+      <div class="conflict-header">
+        <div>
+          <h3 id="port-conflict-title">端口 {{ portConflict.port }} 已被占用</h3>
+          <span>结束占用进程后将立即启动服务</span>
+        </div>
+        <button class="icon-btn-xs" title="取消" :disabled="resolvingConflict" @click="closePortConflict"><UiIcon name="x" :size="14" /></button>
+      </div>
+      <div class="conflict-details">
+        <div><span>PID</span><strong>{{ portConflict.pid }}</strong></div>
+        <div><span>进程</span><strong>{{ portConflict.process_name || '未知进程' }}</strong></div>
+        <div v-if="portConflict.managed_service_name"><span>PyLot 服务</span><strong>{{ portConflict.managed_service_name }}</strong></div>
+        <div v-if="portConflict.process_path" class="conflict-path"><span>路径</span><code>{{ portConflict.process_path }}</code></div>
+      </div>
+      <div v-if="conflictError" class="form-error">{{ conflictError }}</div>
+      <div class="form-actions conflict-actions">
+        <button class="btn-ghost" :disabled="resolvingConflict" @click="closePortConflict">取消</button>
+        <button class="btn-sm btn-red" :disabled="resolvingConflict" @click="resolvePortConflict">{{ resolvingConflict ? '正在处理...' : '结束进程并启动' }}</button>
+      </div>
+    </div>
+  </div>
   <ConfirmDialog v-if="showDeleteId !== null" title="删除服务？" :message="`服务“${selected?.name || ''}”的配置将被删除，此操作无法撤销。`" @confirm="del(showDeleteId)" @cancel="showDeleteId = null" />
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { EventsOff, EventsOn } from '../../wailsjs/runtime/runtime.js'
+import { BrowserOpenURL, EventsOff, EventsOn } from '../../wailsjs/runtime/runtime.js'
 import {
   AddService,
   ClearServiceLogs,
   DeleteService,
   GetServiceLogs,
+  GetServicePortStatus,
   ListServices,
   OpenDirectoryDialog,
   RestartService,
   SetServiceAutoStart,
   StartService,
   StopService,
+  TerminatePortOwnerAndStartService,
   UpdateService,
 } from '../../wailsjs/go/main/App.js'
 import ConfirmDialog from './ConfirmDialog.vue'
@@ -176,7 +228,7 @@ const services = ref([])
 const selectedId = ref(null)
 const showForm = ref(false)
 const editId = ref(null)
-const form = reactive({ name: '', command: '', workDir: '', autoStart: false })
+const form = reactive({ name: '', command: '', workDir: '', autoStart: false, port: '', protocol: 'http' })
 const formError = ref('')
 const actionError = ref('')
 const logs = reactive({})
@@ -184,9 +236,23 @@ const logEl = ref(null)
 const showDeleteId = ref(null)
 const formSaving = ref(false)
 let formHydrating = false
+const portStatuses = reactive({})
+const portConflict = ref(null)
+const conflictServiceId = ref(null)
+const resolvingConflict = ref(false)
+const conflictError = ref('')
+const portProbeTimers = new Map()
 
 const selected = computed(() => services.value.find(s => s.id === selectedId.value) || null)
 const currentLogs = computed(() => selectedId.value === null ? [] : (logs[selectedId.value] || []))
+const selectedPortStatus = computed(() => selectedId.value === null ? null : (portStatuses[selectedId.value] || null))
+const portStatusLabel = computed(() => {
+  const status = selectedPortStatus.value
+  if (!status) return '检测中'
+  if (status.listening) return `正在监听 · PID ${status.pid}`
+  if (selected.value?.running) return '进程运行中，端口尚未监听'
+  return '未监听'
+})
 watch(form, () => {
   if (showForm.value && !formHydrating) store.markDirty()
 })
@@ -209,6 +275,7 @@ async function load() {
     selectedId.value = services.value[0].id
   }
   if (selectedId.value !== null) await loadLogs(selectedId.value)
+  if (selectedId.value !== null) await loadPortStatus(selectedId.value)
 }
 
 async function loadLogs(id) {
@@ -219,7 +286,7 @@ async function loadLogs(id) {
 function openAdd() {
   formHydrating = true
   editId.value = null
-  Object.assign(form, { name: '', command: '', workDir: '', autoStart: false })
+  Object.assign(form, { name: '', command: '', workDir: '', autoStart: false, port: '', protocol: 'http' })
   formError.value = ''
   actionError.value = ''
   showForm.value = true
@@ -234,6 +301,8 @@ function openEdit(s) {
     command: s.command,
     workDir: s.work_dir,
     autoStart: s.auto_start,
+    port: s.port || '',
+    protocol: s.protocol || 'http',
   })
   formError.value = ''
   actionError.value = ''
@@ -260,14 +329,20 @@ async function submitForm() {
     return
   }
 
+  const port = form.port === '' || form.port === null ? 0 : Number(form.port)
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    formError.value = '端口必须在 1-65535 之间，留空表示不管理端口'
+    return
+  }
+
   formSaving.value = true
   try {
     const targetName = form.name
     const targetId = editId.value
     if (targetId) {
-      await UpdateService(targetId, form.name, form.command, form.workDir, form.autoStart)
+      await UpdateService(targetId, form.name, form.command, form.workDir, form.autoStart, port, form.protocol)
     } else {
-      await AddService(form.name, form.command, form.workDir, form.autoStart)
+      await AddService(form.name, form.command, form.workDir, form.autoStart, port, form.protocol)
     }
     closeForm()
     store.clearDirty()
@@ -290,9 +365,8 @@ async function start(s) {
   try {
     await StartService(s.id)
   } catch (e) {
-    Object.assign(s, { status: 'failed', running: false })
-    appendLocalLog(s.id, `启动失败: ${normalizeError(e)}`, true)
-    actionError.value = normalizeError(e)
+    const handled = await handleActionFailure(s.id, e, '启动失败')
+    Object.assign(s, { status: handled ? 'stopped' : 'failed', running: false })
   }
 }
 
@@ -315,8 +389,7 @@ async function restart(id) {
   try {
     await RestartService(id)
   } catch (e) {
-    appendLocalLog(id, `重启失败: ${normalizeError(e)}`, true)
-    actionError.value = normalizeError(e)
+    await handleActionFailure(id, e, '重启失败')
   }
 }
 
@@ -347,6 +420,82 @@ async function selectService(s) {
   store.clearDirty()
   actionError.value = ''
   await loadLogs(s.id)
+  await loadPortStatus(s.id)
+}
+
+async function loadPortStatus(id) {
+  const service = services.value.find(item => item.id === id)
+  if (!service?.port) {
+    delete portStatuses[id]
+    return null
+  }
+  try {
+    const status = await GetServicePortStatus(id)
+    portStatuses[id] = status
+    return status
+  } catch (e) {
+    actionError.value = normalizeError(e)
+    return null
+  }
+}
+
+function openServiceURL(url) {
+  if (url) BrowserOpenURL(url)
+}
+
+async function handleActionFailure(id, error, prefix) {
+  const message = normalizeError(error)
+  appendLocalLog(id, `${prefix}: ${message}`, true)
+  const isPortConflict = message.includes('端口') && (message.includes('占用') || message.includes('未在'))
+  if (isPortConflict) {
+    const status = await loadPortStatus(id)
+    if (status?.listening) {
+      conflictServiceId.value = id
+      portConflict.value = status
+      conflictError.value = ''
+      return true
+    }
+  }
+  actionError.value = message
+  return false
+}
+
+function probePortUntilListening(id, attempts = 10) {
+  const previous = portProbeTimers.get(id)
+  if (previous) clearTimeout(previous)
+  const timer = setTimeout(async () => {
+    portProbeTimers.delete(id)
+    const status = await loadPortStatus(id)
+    const service = services.value.find(item => item.id === id)
+    if (!status?.listening && service?.running && attempts > 1) probePortUntilListening(id, attempts - 1)
+  }, 500)
+  portProbeTimers.set(id, timer)
+}
+
+function closePortConflict() {
+  if (resolvingConflict.value) return
+  portConflict.value = null
+  conflictServiceId.value = null
+  conflictError.value = ''
+}
+
+async function resolvePortConflict() {
+  if (!portConflict.value || conflictServiceId.value === null) return
+  resolvingConflict.value = true
+  conflictError.value = ''
+  const id = conflictServiceId.value
+  try {
+    await TerminatePortOwnerAndStartService(id, portConflict.value.pid)
+    resolvingConflict.value = false
+    closePortConflict()
+    await load()
+  } catch (e) {
+    conflictError.value = normalizeError(e)
+    const status = await loadPortStatus(id)
+    if (status?.listening) portConflict.value = status
+  } finally {
+    resolvingConflict.value = false
+  }
 }
 
 async function clearSelectedLogs() {
@@ -411,6 +560,10 @@ function applyStatus(d) {
     exit_code: d.exit_code,
     last_error: d.last_error,
   })
+  if (s.port) {
+    if (d.running) probePortUntilListening(s.id)
+    else setTimeout(() => loadPortStatus(s.id), 100)
+  }
 }
 
 function scrollLog() {
@@ -433,6 +586,8 @@ onMounted(() => {
 onUnmounted(() => {
   EventsOff('service:log')
   EventsOff('service:status')
+  for (const timer of portProbeTimers.values()) clearTimeout(timer)
+  portProbeTimers.clear()
 })
 </script>
 
@@ -572,7 +727,10 @@ onUnmounted(() => {
 .detail-title,
 .toolbar-actions,
 .form-actions,
-.input-action {
+.input-action,
+.address-row,
+.port-status-row,
+.icon-text-btn {
   display: flex;
   align-items: center;
 }
@@ -656,8 +814,51 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.endpoint-fields {
+  display: grid;
+  grid-template-columns: minmax(120px, .4fr) minmax(180px, 1fr);
+  gap: 12px;
+}
+
 .input-action .inp {
   flex: 1;
+}
+
+.address-row,
+.port-status-row {
+  min-width: 0;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.address-row code {
+  min-width: 0;
+}
+
+.icon-text-btn {
+  gap: 4px;
+}
+
+.icon-btn-xs {
+  width: 26px;
+  height: 26px;
+  flex: 0 0 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.icon-btn-xs:hover {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.port-listening {
+  color: var(--green) !important;
 }
 
 .toggle-row {
@@ -901,6 +1102,82 @@ onUnmounted(() => {
   font-size: 11px;
 }
 
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, .6);
+}
+
+.conflict-dialog {
+  width: min(480px, 100%);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, .3);
+}
+
+.conflict-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.conflict-header h3 {
+  margin-bottom: 4px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.conflict-header span,
+.conflict-details span {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.conflict-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.conflict-details > div {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.conflict-details strong,
+.conflict-details code {
+  overflow: hidden;
+  color: var(--text-dim);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conflict-path {
+  grid-column: 1 / -1;
+}
+
+.conflict-actions {
+  justify-content: flex-end;
+}
+
 @media (max-width: 860px) {
   .services-shell {
     grid-template-columns: 1fr;
@@ -919,6 +1196,15 @@ onUnmounted(() => {
 
   .meta-grid {
     grid-template-columns: 1fr;
+  }
+
+  .endpoint-fields,
+  .conflict-details {
+    grid-template-columns: 1fr;
+  }
+
+  .conflict-path {
+    grid-column: auto;
   }
 }
 </style>
