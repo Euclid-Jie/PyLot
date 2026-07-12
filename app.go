@@ -36,6 +36,9 @@ func (a *App) startup(ctx context.Context) {
 		return
 	}
 	db.CleanOldLogs()
+	if err := script.CleanupStaleRuns(); err != nil {
+		fmt.Println("Stale run cleanup error:", err)
+	}
 	scheduler.Init()
 	a.loadSchedules()
 	scheduler.Start()
@@ -46,6 +49,9 @@ func (a *App) shutdown(ctx context.Context) {
 	scheduler.Stop()
 	for _, id := range script.GetRunningIDs() {
 		script.StopScript(id)
+	}
+	if err := script.CleanupStaleRuns(); err != nil {
+		fmt.Println("Stale run cleanup error:", err)
 	}
 	svc.StopAll()
 	db.DB.Close()
@@ -190,7 +196,10 @@ func (a *App) RunScript(scriptID int, tempArgs string) error {
 		args = tempArgs
 	}
 
-	recordID, _ := script.CreateRecord(scriptID, envSnapshot)
+	recordID, err := script.CreateRecord(scriptID, envSnapshot)
+	if err != nil {
+		return err
+	}
 
 	task := script.RunTask{
 		ScriptID:        scriptID,
@@ -248,7 +257,11 @@ func (a *App) RunScript(scriptID int, tempArgs string) error {
 		"status":   "running",
 	})
 
-	return script.StartScript(task, int(recordID), cbs)
+	if err := script.StartScript(task, int(recordID), cbs); err != nil {
+		script.MarkError(int(recordID))
+		return err
+	}
+	return nil
 }
 
 func (a *App) StopScript(scriptID int) error {

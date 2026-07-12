@@ -97,3 +97,4 @@ cd frontend && npm install && cd ..
 - 窗口大小通过 `localStorage`（`winW`/`winH`）持久化，启动时通过 `SetWindowSize` 恢复。
 - 主题/字体通过 `localStorage`（`theme`/`font`）持久化，启动时设置 `data-theme` 属性和 `--font` CSS 变量。
 - 飞书通知配置（`lark_cli_path`/`lark_open_id`）存 `global_config` 表；`notify.Feishu` 参数为空时静默跳过，不影响正常运行。
+- PyLot 启动和退出时调用 `script.CleanupStaleRuns()` 收敛脚本运行态：遗留的 `running` 记录会标记为 `killed`，`running_tasks` 会清空，避免异常中断后历史日志假卡住。

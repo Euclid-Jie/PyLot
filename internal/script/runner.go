@@ -32,18 +32,21 @@ type RunCallbacks struct {
 }
 
 var (
-	runningCmds    = map[int]*exec.Cmd{}
-	mu             sync.Mutex
+	runningCmds     = map[int]*exec.Cmd{}
+	mu              sync.Mutex
 	OnRunningChange func(count int)
 )
 
 // lineWriter splits incoming bytes into lines and calls onLine for each.
 type lineWriter struct {
+	mu     sync.Mutex
 	buf    bytes.Buffer
 	onLine func(string)
 }
 
 func (w *lineWriter) Write(p []byte) (int, error) {
+	lines := []string{}
+	w.mu.Lock()
 	w.buf.Write(p)
 	for {
 		b := w.buf.Bytes()
@@ -55,31 +58,42 @@ func (w *lineWriter) Write(p []byte) (int, error) {
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
-		w.onLine(line)
+		lines = append(lines, line)
 		w.buf.Next(idx + 1)
+	}
+	w.mu.Unlock()
+	for _, line := range lines {
+		w.onLine(line)
 	}
 	return len(p), nil
 }
 
 func (w *lineWriter) Flush() {
+	lines := []string{}
+	w.mu.Lock()
 	if w.buf.Len() == 0 {
+		w.mu.Unlock()
 		return
 	}
 	// Split buffered content by newlines and emit each line
 	content := w.buf.String()
 	w.buf.Reset()
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		if i == len(lines)-1 && line == "" {
+	parts := strings.Split(content, "\n")
+	for i, line := range parts {
+		if i == len(parts)-1 && line == "" {
 			// Last empty segment after final \n
 			continue
 		}
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
-		if line != "" || i < len(lines)-1 {
-			w.onLine(line)
+		if line != "" || i < len(parts)-1 {
+			lines = append(lines, line)
 		}
+	}
+	w.mu.Unlock()
+	for _, line := range lines {
+		w.onLine(line)
 	}
 }
 
@@ -176,8 +190,8 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 				idle := time.Since(lastOutput)
 				logMu.Unlock()
 				if idle > time.Duration(task.TimeoutSecs)*time.Second {
-					StopScript(task.ScriptID)
 					cbs.OnTimeout()
+					StopScript(task.ScriptID)
 					return
 				}
 				mu.Lock()
@@ -192,6 +206,9 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 
 	go func() {
 		err := cmd.Wait()
+		stdoutWriter.Flush()
+		stderrWriter.Flush()
+
 		mu.Lock()
 		delete(runningCmds, task.ScriptID)
 		count := len(runningCmds)
@@ -209,9 +226,14 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 			isError = 1
 		}
 		now := time.Now()
-		db.DB.Exec(`UPDATE run_records SET ended_at=?,status=?,is_error=? WHERE id=?`,
+		res, updateErr := db.DB.Exec(`UPDATE run_records SET ended_at=?,status=?,is_error=? WHERE id=? AND status='running'`,
 			now, status, isError, recordID)
-		cbs.OnStatus(status)
+		if updateErr == nil {
+			affected, _ := res.RowsAffected()
+			if affected > 0 {
+				cbs.OnStatus(status)
+			}
+		}
 	}()
 
 	return nil
@@ -225,7 +247,7 @@ func StopScript(scriptID int) {
 		return
 	}
 	pid := cmd.Process.Pid
-	exec.Command("taskkill", "/F", "/PID", fmt.Sprintf("%d", pid)).Run()
+	exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", pid)).Run()
 }
 
 func IsRunning(scriptID int) bool {
@@ -256,12 +278,26 @@ func GetPID(scriptID int) int {
 
 func MarkKilled(recordID int) {
 	now := time.Now()
-	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE id=?`, now, recordID)
+	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE id=? AND status='running'`, now, recordID)
 }
 
 func MarkTimeout(recordID int) {
 	now := time.Now()
-	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='timeout',is_error=1 WHERE id=?`, now, recordID)
+	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='timeout',is_error=1 WHERE id=? AND status='running'`, now, recordID)
+}
+
+func MarkError(recordID int) {
+	now := time.Now()
+	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='error',is_error=1 WHERE id=? AND status='running'`, now, recordID)
+}
+
+func CleanupStaleRuns() error {
+	now := time.Now()
+	if _, err := db.DB.Exec(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE status='running' AND ended_at IS NULL`, now); err != nil {
+		return err
+	}
+	_, err := db.DB.Exec(`DELETE FROM running_tasks`)
+	return err
 }
 
 func CreateRecord(scriptID int, envSnapshot string) (int64, error) {

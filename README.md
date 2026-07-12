@@ -67,3 +67,7 @@ wails build -platform windows/amd64 -ldflags "-H windowsgui"
 1. 安装 lark-cli：`npm install -g @larksuiteoapi/lark-cli`
 2. 初始化：`lark-cli config init`（填入 App ID 和 App Secret）
 3. 在 PyLot 设置页填入 lark-cli 路径和你的 Open ID
+
+## 运行态恢复
+
+PyLot 启动和退出时会自动收敛脚本运行态：将异常中断遗留的 `running` 运行记录标记为 `killed`，并清空 `running_tasks`，避免历史日志长期显示为“运行中”。

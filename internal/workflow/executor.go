@@ -13,8 +13,8 @@ import (
 )
 
 type Node struct {
-	ID       string `json:"id"`
-	ScriptID int    `json:"scriptId"`
+	ID       string  `json:"id"`
+	ScriptID int     `json:"scriptId"`
 	X        float64 `json:"x"`
 	Y        float64 `json:"y"`
 }
@@ -152,7 +152,10 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	}
 	mergedEnv := env.MergeEnv(globalEnv, privateEnv)
 	envSnapshot := env.BuildEnvSnapshot(globalEnv, privateEnv)
-	recordID, _ := script.CreateRecord(n.ScriptID, envSnapshot)
+	recordID, err := script.CreateRecord(n.ScriptID, envSnapshot)
+	if err != nil {
+		return err
+	}
 
 	done := make(chan string, 1)
 
@@ -190,6 +193,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 
 	onStatus(runID, nodeID, n.ScriptID, "running")
 	if err := script.StartScript(task, int(recordID), cbs); err != nil {
+		script.MarkError(int(recordID))
 		return err
 	}
 
@@ -201,6 +205,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 		}
 		return nil
 	case <-ctx.Done():
+		script.MarkKilled(int(recordID))
 		script.StopScript(n.ScriptID)
 		return ctx.Err()
 	}
