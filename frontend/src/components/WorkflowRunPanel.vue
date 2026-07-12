@@ -122,31 +122,31 @@ function normalizeError(error) {
 <style scoped>
 .wf-run-panel { padding: 8px; }
 .config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.config-header h2 { font-size: 15px; font-weight: 600; color: var(--text); }
+.config-header h2 { font-size: var(--type-object-title); font-weight: var(--weight-semibold); color: var(--text); }
 .header-actions { display: flex; gap: 6px; align-items: center; }
 .node-list { display: flex; flex-direction: column; gap: 8px; }
 .node-row { display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; cursor: pointer; }
 .node-row:hover { background: var(--surface); }
 .node-row.active { border-color: var(--accent); background: var(--surface); }
 .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
-.node-name { flex: 1; font-size: 13px; color: var(--text); }
-.node-status { font-size: 11px; color: var(--text-muted); }
+.node-name { flex: 1; font-size: var(--type-body); color: var(--text); }
+.node-status { font-size: var(--type-caption); color: var(--text-muted); }
 .wf-run-panel { max-width: 980px; margin: 0 auto; padding: 0; }
 .config-header { margin-bottom: 20px; }
-.config-header h2 { font-size: 19px; }
-.action-error { margin: -10px 0 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: 12px; }
+.config-header h2 { font-size: var(--type-page-title); }
+.action-error { margin: -10px 0 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: var(--type-label); }
 .node-list { gap: 6px; }
 .node-row { min-height: 44px; padding: 8px 12px; border-radius: var(--radius); background: var(--surface); }
 .node-row:hover { background: var(--surface-hover); }
 .dot.running { background: var(--orange); } .dot.success { background: var(--green); } .dot.error, .dot.timeout { background: var(--red); }
-.node-status { min-width: 56px; font-size: 12px; text-align: right; }
+.node-status { min-width: 56px; font-size: var(--type-label); text-align: right; }
 .workflow-log { height: 260px; display: flex; flex-direction: column; margin-top: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); }
-.workflow-log header { min-height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: 12px; font-weight: 600; }
-.workflow-log header strong { color: var(--text-muted); font-size: 11px; font-weight: 500; }
-.workflow-log-body { min-height: 0; flex: 1; overflow: auto; padding: 8px 10px; background: var(--input-bg); font-family: var(--mono); font-size: 12px; }
-.workflow-log-line { display: grid; grid-template-columns: 66px 120px minmax(0, 1fr); gap: 8px; color: var(--text-dim); line-height: 1.65; }
+.workflow-log header { min-height: 36px; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; border-bottom: 1px solid var(--border); background: var(--surface); color: var(--text-dim); font-size: var(--type-label); font-weight: var(--weight-medium); }
+.workflow-log header strong { color: var(--text-muted); font-size: var(--type-caption); font-weight: var(--weight-medium); }
+.workflow-log-body { min-height: 0; flex: 1; overflow: auto; padding: 8px 10px; background: var(--input-bg); font-family: var(--mono); font-size: var(--type-code); font-weight: var(--weight-regular); }
+.workflow-log-line { display: grid; grid-template-columns: 66px 120px minmax(0, 1fr); gap: 8px; color: var(--text-dim); line-height: var(--line-code); }
 .workflow-log-line > span { color: var(--text-muted); }
-.workflow-log-line > strong { overflow: hidden; color: var(--accent); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.workflow-log-line > strong { overflow: hidden; color: var(--accent); font-weight: var(--weight-medium); text-overflow: ellipsis; white-space: nowrap; }
 .workflow-log-line code { color: inherit; white-space: pre-wrap; word-break: break-all; }
 .workflow-log-line.error { color: var(--red); }
 .workflow-log-empty { padding: 8px 2px; color: var(--text-muted); }

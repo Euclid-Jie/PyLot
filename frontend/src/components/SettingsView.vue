@@ -14,11 +14,14 @@
       <div class="setting-row">
         <label>字体</label>
         <select v-model="font" @change="setFont(font)">
-          <option value="system-ui, sans-serif">系统默认</option>
-          <option value="'Microsoft YaHei', sans-serif">微软雅黑</option>
-          <option value="'Segoe UI', sans-serif">Segoe UI</option>
-          <option value="'JetBrains Mono', monospace">JetBrains Mono</option>
-          <option value="'Consolas', monospace">Consolas</option>
+          <option :value="defaultFont">Windows UI（推荐）</option>
+          <option value="system-ui, 'Microsoft YaHei UI', sans-serif">系统默认</option>
+          <option value="'Microsoft YaHei UI', 'Microsoft YaHei', sans-serif">微软雅黑</option>
+          <option value="'Segoe UI Variable', 'Segoe UI', 'Microsoft YaHei UI', sans-serif">Segoe UI</option>
+          <option value="Consolas, 'Microsoft YaHei UI', monospace">Consolas</option>
+          <option value="'Cascadia Mono', 'Cascadia Code', 'Microsoft YaHei UI', monospace">Cascadia Mono</option>
+          <option value="'JetBrains Mono', 'Microsoft YaHei UI', monospace">JetBrains Mono</option>
+          <option value="'Fira Code', 'Microsoft YaHei UI', monospace">Fira Code</option>
         </select>
       </div>
     </div>
@@ -56,13 +59,15 @@ import { nextTick, ref, onMounted, watch } from 'vue'
 import { GetGlobalConfig, SaveGlobalConfig, OpenFileDialog } from '../../wailsjs/go/main/App.js'
 import UiIcon from './UiIcon.vue'
 import { useMainStore } from '../stores/main.js'
+import { DEFAULT_FONT, resolveFont } from '../utils/font.js'
 
 const store = useMainStore()
 const envPath = ref('')
 const larkCLI = ref('')
 const larkOpenID = ref('')
 const theme = ref(localStorage.getItem('theme') || 'dark')
-const font = ref(localStorage.getItem('font') || 'system-ui, sans-serif')
+const defaultFont = DEFAULT_FONT
+const font = ref(resolveFont())
 const toast = ref('')
 const saving = ref(false)
 const saveError = ref('')
@@ -119,25 +124,25 @@ async function saveConfig() {
 .settings-page { width: min(720px, 100%); padding: 0; }
 .settings-header { margin-bottom: 4px; }
 .section { padding: 22px 0; border-bottom: 1px solid var(--border); }
-.section-title { margin-bottom: 16px; color: var(--text); font-size: 14px; font-weight: 600; }
+.section-title { margin-bottom: 16px; color: var(--text); font-size: var(--type-section-title); font-weight: var(--weight-semibold); }
 .setting-row { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
 .setting-row:last-child { margin-bottom: 0; }
-.setting-row label { width: 110px; font-size: 14px; color: var(--text-dim); flex-shrink: 0; }
+.setting-row label { width: 110px; color: var(--text-dim); flex-shrink: 0; font-size: var(--type-body); font-weight: var(--weight-regular); }
 .toggle-group { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.toggle-group button { padding: 6px 18px; background: transparent; border: none; color: var(--text-muted); font-size: 14px; font-weight: 500; transition: background .12s, color .12s; }
+.toggle-group button { padding: 6px 18px; background: transparent; border: none; color: var(--text-muted); font-size: var(--type-body); font-weight: var(--weight-medium); transition: background .12s, color .12s; }
 .toggle-group button.active { background: var(--accent); color: #fff; }
 .toggle-group button:hover:not(.active) { background: var(--surface2); color: var(--text); }
-select { padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s; }
+select { padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: var(--type-body); transition: border-color .12s; }
 select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .path-row { display: flex; gap: 8px; flex: 1; }
-.path-row input { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s; }
+.path-row input { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: var(--type-body); transition: border-color .12s; }
 .path-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .path-row button { flex-shrink: 0; }
-.btn-save { padding: 6px 18px; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: var(--radius); font-size: 14px; font-weight: 500; margin-top: 6px; transition: background .12s; }
+.btn-save { padding: 6px 18px; background: var(--accent); color: #fff; border: 1px solid var(--accent); border-radius: var(--radius); font-size: var(--type-section-title); font-weight: var(--weight-medium); margin-top: 6px; transition: background .12s; }
 .btn-save:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
-.full-input { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s; }
+.full-input { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: var(--type-body); transition: border-color .12s; }
 .full-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
 .settings-actions { display: flex; justify-content: flex-end; margin-top: 18px; }
-.save-error { margin-top: 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: 12px; }
+.save-error { margin-top: 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: var(--type-label); }
 @media (max-width: 720px) { .setting-row { align-items: flex-start; flex-direction: column; gap: 7px; } .setting-row label { width: auto; } .path-row, .full-input { width: 100%; } }
 </style>

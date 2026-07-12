@@ -89,35 +89,35 @@ function newWorkflow() { store.newWorkflow() }
 <style scoped>
 .sidebar-inner { height: 100%; display: flex; flex-direction: column; }
 .brand { min-height: 66px; display: flex; align-items: center; gap: 11px; padding: 12px 14px; border-bottom: 1px solid var(--border); }
-.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 17px; font-weight: 700; }
+.brand-mark { width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0; border-radius: 8px; background: var(--accent); color: #fff; font-size: 17px; font-weight: var(--weight-bold); }
 .brand strong, .brand span { display: block; }
-.brand strong { color: var(--text); font-size: 14px; font-weight: 600; }
-.brand span { margin-top: 1px; color: var(--text-muted); font-size: 12px; }
+.brand strong { color: var(--text); font-size: var(--type-section-title); font-weight: var(--weight-semibold); }
+.brand span { margin-top: 1px; color: var(--text-muted); font-size: var(--type-label); }
 .primary-nav { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 10px 4px; }
-.primary-nav button, footer button { min-height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-dim); font-size: 13px; text-align: left; }
+.primary-nav button, footer button { min-height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 11px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-dim); font-size: var(--type-body); font-weight: var(--weight-regular); text-align: left; }
 .primary-nav button:hover, footer button:hover { background: var(--surface-hover); color: var(--text); }
-.primary-nav button.active, footer button.active { border-color: rgba(59, 130, 246, .28); background: var(--accent-dim); color: var(--accent); }
-.resource-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 12px 7px 14px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+.primary-nav button.active, footer button.active { border-color: rgba(59, 130, 246, .28); background: var(--accent-dim); color: var(--accent); font-weight: var(--weight-medium); }
+.resource-header { display: flex; align-items: center; justify-content: space-between; padding: 13px 12px 7px 14px; color: var(--text-muted); font-size: var(--type-label); font-weight: var(--weight-medium); }
 .resource-header .ui-icon-btn, .compact { width: 26px; height: 26px; }
 .search-box { height: 32px; display: flex; align-items: center; gap: 7px; margin: 0 10px 8px; padding: 0 9px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text-muted); }
 .search-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
-.search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
+.search-box input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--type-label); }
 .search-box button { display: grid; place-items: center; border: 0; background: transparent; color: var(--text-muted); }
 .resource-scroll { min-height: 0; flex: 1; overflow-y: auto; padding: 0 8px 12px; }
 .resource-section + .resource-section { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--border); }
 .section-title-row { display: flex; align-items: center; }
 .section-title-row .section-title { flex: 1; }
 .section-title, .category-title { width: 100%; display: grid; grid-template-columns: 16px minmax(0, 1fr) auto; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--text-dim); text-align: left; }
-.section-title { min-height: 30px; padding: 0 6px; font-size: 12px; font-weight: 600; }
-.category-title { min-height: 28px; padding: 0 8px 0 16px; color: var(--text-muted); font-size: 12px; }
+.section-title { min-height: 30px; padding: 0 6px; font-size: var(--type-label); font-weight: var(--weight-medium); }
+.category-title { min-height: 28px; padding: 0 8px 0 16px; color: var(--text-muted); font-size: var(--type-label); }
 .section-title:hover, .category-title:hover { color: var(--text); }
-.section-title strong, .category-title strong { color: var(--text-muted); font-size: 11px; font-weight: 500; }
-.resource-item { width: 100%; min-height: 32px; display: grid; grid-template-columns: 18px minmax(0, 1fr) 10px; align-items: center; gap: 7px; margin: 1px 0; padding: 0 8px 0 20px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-dim); font-size: 13px; text-align: left; }
+.section-title strong, .category-title strong { color: var(--text-muted); font-size: var(--type-caption); font-weight: var(--weight-medium); }
+.resource-item { width: 100%; min-height: 32px; display: grid; grid-template-columns: 18px minmax(0, 1fr) 10px; align-items: center; gap: 7px; margin: 1px 0; padding: 0 8px 0 20px; border: 1px solid transparent; border-radius: var(--radius); background: transparent; color: var(--text-dim); font-size: var(--type-body); font-weight: var(--weight-regular); text-align: left; }
 .resource-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .resource-item:hover { background: var(--surface-hover); color: var(--text); }
-.resource-item.active { border-color: rgba(59, 130, 246, .22); background: var(--accent-dim); color: var(--accent); }
+.resource-item.active { border-color: rgba(59, 130, 246, .22); background: var(--accent-dim); color: var(--accent); font-weight: var(--weight-medium); }
 .running-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 0 3px var(--green-dim); animation: pulse 1.5s ease-in-out infinite; }
-.resource-empty { padding: 10px 20px; color: var(--text-muted); font-size: 12px; }
+.resource-empty { padding: 10px 20px; color: var(--text-muted); font-size: var(--type-label); }
 footer { padding: 9px 10px; border-top: 1px solid var(--border); }
 footer button { width: 100%; }
 @keyframes pulse { 50% { opacity: .45; } }

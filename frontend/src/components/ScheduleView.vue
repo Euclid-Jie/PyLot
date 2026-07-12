@@ -464,7 +464,7 @@ function formatError(err) {
   border-radius: var(--radius-sm);
   background: transparent;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--type-label);
   white-space: nowrap;
 }
 
@@ -482,15 +482,19 @@ function formatError(err) {
 .filter-tabs span {
   margin: 0;
   color: inherit;
-  font-size: 11px;
+  font-size: var(--type-caption);
   line-height: 1;
   opacity: .8;
 }
 
-.view-header h2,
+.view-header h2 {
+  font-size: var(--type-page-title);
+  font-weight: var(--weight-semibold);
+}
+
 .history-header h3 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--type-section-title);
+  font-weight: var(--weight-semibold);
 }
 
 .view-header span,
@@ -498,7 +502,7 @@ function formatError(err) {
   display: block;
   margin-top: 2px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .table-wrap {
@@ -510,7 +514,7 @@ table {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: var(--type-body);
 }
 
 .col-target {
@@ -539,10 +543,9 @@ th {
   z-index: 1;
   text-align: left;
   padding: 8px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+  font-size: var(--type-label);
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border);
   background: var(--bg);
@@ -604,16 +607,16 @@ code {
   padding: 3px 8px;
   border-radius: var(--radius-sm);
   color: var(--green);
-  font-size: 13px;
+  font-size: var(--type-body);
   border: 1px solid var(--border);
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+  font-family: var(--mono);
 }
 
 .btn-toggle {
   padding: 4px 14px;
   border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
   cursor: pointer;
   transition: opacity .12s;
 }
@@ -644,7 +647,7 @@ code {
 .btn-edit,
 .btn-del {
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--type-body);
   transition: color .12s, border-color .12s, background .12s;
 }
 
@@ -653,7 +656,7 @@ code {
   background: var(--accent);
   color: #fff;
   border: 1px solid var(--accent);
-  font-weight: 500;
+  font-weight: var(--weight-medium);
 }
 
 .btn-add:hover {
@@ -734,7 +737,7 @@ code {
   justify-content: center;
   white-space: nowrap;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: var(--type-caption);
   line-height: 1.6;
 }
 
@@ -763,13 +766,13 @@ code {
 }
 
 .run-main strong {
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--type-body);
+  font-weight: var(--weight-semibold);
 }
 
 .run-main small {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .status-pill {
@@ -822,13 +825,13 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--type-body);
+  font-weight: var(--weight-semibold);
 }
 
 .detail-meta span {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-label);
   white-space: nowrap;
 }
 
@@ -842,9 +845,9 @@ code {
   border-radius: var(--radius-sm);
   background: var(--input-bg);
   color: var(--text);
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-  font-size: 12px;
-  line-height: 1.6;
+  font-family: var(--mono);
+  font-size: var(--type-code);
+  line-height: var(--line-code);
   text-align: left;
   white-space: pre-wrap;
   word-break: break-all;
@@ -853,7 +856,7 @@ code {
 .empty,
 .detail-empty {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .empty {
@@ -881,7 +884,7 @@ code {
   border: 1px solid rgba(248,81,73,.32);
   border-radius: var(--radius);
   padding: 9px 12px;
-  font-size: 13px;
+  font-size: var(--type-body);
   box-shadow: 0 8px 24px rgba(0,0,0,.25);
   z-index: 200;
 }

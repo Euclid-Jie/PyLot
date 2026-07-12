@@ -351,11 +351,11 @@ export namespace main {
 	    managed_service_id: number;
 	    managed_service_pid: number;
 	    managed_service_name: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ServicePortStatus(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.configured = source["configured"];
@@ -374,6 +374,7 @@ export namespace main {
 	}
 
 }
+
 export namespace scheduler {
 	
 	export class ScheduleInfo {
@@ -419,3 +420,4 @@ export namespace scheduler {
 	}
 
 }
+

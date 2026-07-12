@@ -7,8 +7,7 @@
         <button class="ui-btn small" :class="{ active: errorsOnly }" @click="errorsOnly = !errorsOnly">仅看错误</button>
         <button class="ui-icon-btn" :class="{ active: autoFollow }" :title="autoFollow ? '暂停自动滚动' : '开启自动滚动'" :aria-label="autoFollow ? '暂停自动滚动' : '开启自动滚动'" @click="autoFollow = !autoFollow"><UiIcon :name="autoFollow ? 'pause' : 'play'" /></button>
         <button class="ui-icon-btn" title="历史记录" aria-label="历史记录" @click="showHistory = true"><UiIcon name="history" /></button>
-        <button class="ui-icon-btn" :disabled="!workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir('vscode')"><UiIcon name="terminal" /></button>
-        <button class="ui-icon-btn" :disabled="!workDir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir('explorer')"><UiIcon name="folderOpen" /></button>
+        <button class="ui-icon-btn" :disabled="!workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir"><UiIcon name="terminal" /></button>
         <button class="ui-icon-btn" title="清空输出" aria-label="清空输出" @click="store.clearLogs()"><UiIcon name="delete" /></button>
         <button class="ui-icon-btn" title="折叠输出面板" aria-label="折叠输出面板" @click="$emit('collapse')"><UiIcon name="chevronDown" /></button>
       </div>
@@ -26,7 +25,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { OpenInFileExplorer, OpenInVSCode } from '../../wailsjs/go/main/App.js'
+import { OpenInVSCode } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 import HistoryModal from './HistoryModal.vue'
 import UiIcon from './UiIcon.vue'
@@ -56,12 +55,11 @@ function handleScroll() {
   const distance = logBody.value.scrollHeight - logBody.value.scrollTop - logBody.value.clientHeight
   if (distance > 48) autoFollow.value = false
 }
-async function openWorkDir(target) {
+async function openWorkDir() {
   if (!workDir.value) return
   openError.value = ''
   try {
-    if (target === 'vscode') await OpenInVSCode(workDir.value)
-    else await OpenInFileExplorer(workDir.value)
+    await OpenInVSCode(workDir.value)
   } catch (error) {
     openError.value = String(error?.message || error || '打开工作目录失败').replace(/^Error:\s*/i, '')
   }
@@ -72,19 +70,19 @@ async function openWorkDir(target) {
 .log-panel { height: 100%; display: flex; flex-direction: column; background: var(--bg); }
 .log-toolbar { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 10px 5px 14px; border-bottom: 1px solid var(--border); background: var(--sidebar-bg); }
 .log-heading, .log-tools { display: flex; align-items: center; }
-.log-heading { gap: 7px; color: var(--text-dim); font-size: 12px; font-weight: 600; }
-.log-heading strong { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--surface-hover); color: var(--text-muted); font-size: 11px; text-align: center; }
+.log-heading { gap: 7px; color: var(--text-dim); font-size: var(--type-body); font-weight: var(--weight-semibold); }
+.log-heading strong { min-width: 20px; padding: 0 5px; border-radius: 999px; background: var(--surface-hover); color: var(--text-muted); font-size: var(--type-caption); text-align: center; }
 .log-tools { gap: 4px; }
 .log-search { width: min(180px, 20vw); height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text-muted); }
 .log-search:focus-within { border-color: var(--accent); }
-.log-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
+.log-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: var(--type-label); }
 .ui-btn.active, .ui-icon-btn.active { border-color: rgba(59, 130, 246, .35); background: var(--accent-dim); color: var(--accent); }
-.log-tool-error { padding: 6px 14px; border-bottom: 1px solid rgba(248, 81, 73, .28); background: var(--red-dim); color: var(--red); font-size: 12px; }
-.log-body { min-height: 0; flex: 1; overflow: auto; padding: 8px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.65; }
+.log-tool-error { padding: 6px 14px; border-bottom: 1px solid rgba(248, 81, 73, .28); background: var(--red-dim); color: var(--red); font-size: var(--type-label); }
+.log-body { min-height: 0; flex: 1; overflow: auto; padding: 8px 14px; font-family: var(--mono); font-size: var(--type-code); font-weight: var(--weight-regular); line-height: var(--line-code); }
 .log-line { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px; color: var(--text-dim); }
 .log-line span:last-child { white-space: pre-wrap; word-break: break-all; }
 .log-time { color: var(--text-muted); user-select: none; }
 .log-line.error { color: var(--red); }
-.log-empty { padding-top: 10px; color: var(--text-muted); font-size: 12px; }
+.log-empty { padding-top: 10px; color: var(--text-muted); font-size: var(--type-label); }
 @media (max-width: 900px) { .log-search { display: none; } .log-tools .ui-btn { display: none; } }
 </style>

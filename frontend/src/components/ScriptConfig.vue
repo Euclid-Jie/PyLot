@@ -53,8 +53,7 @@
         <label>工作目录</label>
         <input v-model="form.workDir" class="ui-input ui-mono" />
         <button class="ui-btn" @click="browseDir"><UiIcon name="folder" />选择</button>
-        <button class="ui-icon-btn workdir-icon-btn" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir('vscode')"><UiIcon name="terminal" /></button>
-        <button class="ui-icon-btn workdir-icon-btn" :disabled="!form.workDir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir('explorer')"><UiIcon name="folderOpen" /></button>
+        <button class="ui-icon-btn workdir-icon-btn" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir"><UiIcon name="terminal" /></button>
       </div>
 
       <div class="form-section">
@@ -94,7 +93,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
-import { GetScript, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, OpenInFileExplorer, OpenInVSCode, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
+import { GetScript, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, OpenInVSCode, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 import TempArgsModal from './TempArgsModal.vue'
 import TimerModal from './TimerModal.vue'
@@ -294,11 +293,10 @@ async function browseDir() {
   if (p) form.value.workDir = p
 }
 
-async function openWorkDir(target) {
+async function openWorkDir() {
   actionError.value = ''
   try {
-    if (target === 'vscode') await OpenInVSCode(form.value.workDir)
-    else await OpenInFileExplorer(form.value.workDir)
+    await OpenInVSCode(form.value.workDir)
   } catch (error) {
     actionError.value = normalizeError(error)
   }
@@ -312,10 +310,10 @@ function normalizeError(error) {
 <style scoped>
 .script-config { padding: 0; }
 .config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
-.config-header h2 { font-size: 20px; font-weight: 600; color: var(--text); }
+.config-header h2 { color: var(--text); font-size: var(--type-page-title); font-weight: var(--weight-semibold); }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.badge-running { background: var(--green-dim); color: var(--green); padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; border: 1px solid rgba(63,185,80,.3); }
-.btn-run, .btn-stop, .btn-save, .btn-copy, .btn-timer, .btn-delete { padding: 5px 14px; border-radius: var(--radius); font-size: 14px; font-weight: 500; transition: background .12s, opacity .12s; }
+.badge-running { background: var(--green-dim); color: var(--green); padding: 5px 12px; border-radius: 20px; font-size: var(--type-body); font-weight: var(--weight-medium); border: 1px solid rgba(63,185,80,.3); }
+.btn-run, .btn-stop, .btn-save, .btn-copy, .btn-timer, .btn-delete { padding: 5px 14px; border-radius: var(--radius); font-size: var(--type-section-title); font-weight: var(--weight-medium); transition: background .12s, opacity .12s; }
 .btn-run   { background: var(--green-dim);  color: var(--green);  border: 1px solid rgba(63,185,80,.4); }
 .btn-stop  { background: var(--red-dim);    color: var(--red);    border: 1px solid rgba(248,81,73,.4); }
 .btn-save  { background: var(--accent);     color: #fff;          border: 1px solid var(--accent); }
@@ -326,51 +324,51 @@ function normalizeError(error) {
 .btn-run:hover, .btn-stop:hover, .btn-copy:hover, .btn-timer:hover, .btn-delete:hover { opacity: .8; }
 .form-body { border: none; }
 .form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
-.form-row > label:first-child { width: 80px; font-size: 14px; color: var(--text-dim); flex-shrink: 0; text-align: right; }
-.label-inline { font-size: 14px; color: var(--text-dim); flex-shrink: 0; white-space: nowrap; }
-.form-row input, .form-row select { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; transition: border-color .12s, box-shadow .12s; }
+.form-row > label:first-child { width: 80px; font-size: var(--type-section-title); color: var(--text-dim); flex-shrink: 0; text-align: right; }
+.label-inline { font-size: var(--type-section-title); color: var(--text-dim); flex-shrink: 0; white-space: nowrap; }
+.form-row input, .form-row select { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: var(--type-section-title); transition: border-color .12s, box-shadow .12s; }
 .form-row input:focus, .form-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
-.form-row > button { padding: 6px 12px; background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; flex-shrink: 0; transition: background .12s, color .12s; }
+.form-row > button { padding: 6px 12px; background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--type-body); flex-shrink: 0; transition: background .12s, color .12s; }
 .form-row > button:hover { background: var(--surface); color: var(--text); border-color: var(--text-muted); }
 .mode-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
-.mode-btn { padding: 6px 20px; background: transparent; color: var(--text-muted); border: none; font-size: 14px; font-weight: 500; cursor: pointer; transition: background .12s, color .12s; }
+.mode-btn { padding: 6px 20px; background: transparent; color: var(--text-muted); border: none; font-size: var(--type-section-title); font-weight: var(--weight-medium); cursor: pointer; transition: background .12s, color .12s; }
 .mode-btn.active { background: var(--accent); color: #fff; }
 .mode-btn:not(.active):hover { background: var(--surface2); color: var(--text); }
 .form-section { margin-top: 20px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
-.section-header span { font-size: 12px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
-.btn-add-env { padding: 4px 10px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; transition: background .12s, color .12s; }
+.section-header span { color: var(--text-muted); font-size: var(--type-section-title); font-weight: var(--weight-semibold); }
+.btn-add-env { padding: 4px 10px; background: transparent; color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--type-body); transition: background .12s, color .12s; }
 .btn-add-env:hover { background: var(--surface2); color: var(--text); }
 .env-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.env-row input { flex: 1; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: 14px; }
+.env-row input { flex: 1; padding: 6px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: var(--type-section-title); }
 .env-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
-.env-eq { color: var(--text-muted); font-size: 14px; flex-shrink: 0; }
-.arg-prefix { color: var(--text-muted); font-size: 14px; flex-shrink: 0; font-family: monospace; }
-.btn-rm { padding: 4px 8px; background: none; color: var(--text-muted); border: none; font-size: 14px; transition: color .12s; }
+.env-eq { color: var(--text-muted); font-size: var(--type-section-title); flex-shrink: 0; }
+.arg-prefix { color: var(--text-muted); font-family: var(--mono); font-size: var(--type-body); font-weight: var(--weight-regular); flex-shrink: 0; }
+.btn-rm { padding: 4px 8px; background: none; color: var(--text-muted); border: none; font-size: var(--type-section-title); transition: color .12s; }
 .btn-rm:hover { color: var(--red); }
 fieldset:disabled { opacity: 0.4; pointer-events: none; }
-.toast { position: fixed; bottom: 280px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: 14px; font-weight: 500; z-index: 200; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
+.toast { position: fixed; bottom: 280px; left: 50%; transform: translateX(-50%); background: var(--green); color: #fff; padding: 8px 20px; border-radius: 20px; font-size: var(--type-section-title); font-weight: var(--weight-medium); z-index: 200; pointer-events: none; box-shadow: 0 4px 12px rgba(0,0,0,.3); }
 
 /* Unified desktop form treatment. */
 .script-config { max-width: 1180px; margin: 0 auto; }
 .config-header { margin-bottom: 22px; }
-.config-header h2 { font-size: 19px; }
+.config-header h2 { font-size: var(--type-page-title); }
 .header-actions { gap: 6px; flex-wrap: nowrap; }
 .danger-icon:hover { border-color: rgba(248, 81, 73, .35); background: var(--red-dim); color: var(--red); }
-.action-message { margin: -10px 0 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: 12px; }
+.action-message { margin: -10px 0 14px; padding: 8px 10px; border: 1px solid rgba(248, 81, 73, .28); border-radius: var(--radius); background: var(--red-dim); color: var(--red); font-size: var(--type-label); }
 .form-body { display: flex; flex-direction: column; gap: 0; }
 .form-row { min-height: 44px; margin-bottom: 6px; }
-.form-row > label:first-child { width: 88px; color: var(--text-dim); font-size: 13px; text-align: left; }
-.label-inline { font-size: 13px; }
-.form-row input, .form-row select, .env-row input { min-height: var(--control-lg); padding: 7px 10px; border-color: var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text); font-size: 13px; }
+.form-row > label:first-child { width: 88px; color: var(--text-dim); font-size: var(--type-label); font-weight: var(--weight-regular); text-align: left; }
+.label-inline { font-size: var(--type-label); font-weight: var(--weight-regular); }
+.form-row input, .form-row select, .env-row input { min-height: var(--control-lg); padding: 7px 10px; border-color: var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text); font-size: var(--type-body); }
 .form-row > button.ui-btn { min-height: var(--control-lg); padding: 0 12px; background: var(--surface); color: var(--text-dim); }
 .form-row > button.workdir-icon-btn { width: var(--control-lg); height: var(--control-lg); min-height: var(--control-lg); padding: 0; background: var(--surface); }
 .mode-toggle { background: var(--input-bg); }
-.mode-btn { min-height: 34px; padding: 0 18px; font-size: 13px; }
+.mode-btn { min-height: 34px; padding: 0 18px; font-size: var(--type-body); }
 .mode-btn.active { background: var(--accent-dim); color: var(--accent); }
 .form-section { margin-top: 18px; padding: 16px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
 .section-header { margin-bottom: 12px; padding-bottom: 10px; }
-.section-header span { color: var(--text-dim); font-size: 13px; letter-spacing: 0; text-transform: none; }
+.section-header span { color: var(--text-dim); font-size: var(--type-section-title); font-weight: var(--weight-semibold); }
 .env-row { min-height: 36px; margin-bottom: 7px; }
 .env-row:last-child { margin-bottom: 0; }
 .env-row .ui-icon-btn { width: 30px; height: 30px; }

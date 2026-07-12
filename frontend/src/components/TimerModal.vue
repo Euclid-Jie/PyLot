@@ -460,14 +460,14 @@ async function handleSave() {
 .eyebrow {
   margin-bottom: 4px;
   color: var(--orange);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--type-label);
+  font-weight: var(--weight-semibold);
 }
 
 h3 {
   color: var(--text);
-  font-size: 20px;
-  font-weight: 600;
+  font-size: var(--type-page-title);
+  font-weight: var(--weight-semibold);
   line-height: 1.2;
 }
 
@@ -510,7 +510,7 @@ h3 {
 
 .field > label {
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--type-body);
   text-align: right;
 }
 
@@ -525,7 +525,7 @@ input[type="time"],
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
-  font-size: 14px;
+  font-size: var(--type-section-title);
 }
 
 select:focus,
@@ -552,7 +552,7 @@ input[type="time"]:focus,
   border: 0;
   background: transparent;
   color: var(--text-muted);
-  font-size: 14px;
+  font-size: var(--type-section-title);
 }
 
 .segmented button.active {
@@ -576,7 +576,7 @@ input[type="time"]:focus,
   border-radius: var(--radius);
   background: var(--input-bg);
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .weekday-grid label.checked {
@@ -611,7 +611,7 @@ input[type="time"]:focus,
   border-radius: var(--radius);
   background: var(--surface);
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .ghost-btn:hover,
@@ -669,13 +669,13 @@ input[type="time"]:focus,
   gap: 12px;
   margin-bottom: 10px;
   color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: var(--type-label);
+  font-weight: var(--weight-semibold);
 }
 
 .preview-title strong {
   color: var(--orange);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .cron-list {
@@ -690,8 +690,8 @@ code {
   border-radius: var(--radius-sm);
   background: var(--green-dim);
   color: var(--green);
-  font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
-  font-size: 13px;
+  font-family: var(--mono);
+  font-size: var(--type-body);
 }
 
 .empty-preview {
@@ -745,7 +745,7 @@ code {
   margin-top: 14px;
   padding: 9px 12px;
   border-radius: var(--radius);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .message.error {
@@ -779,8 +779,8 @@ code {
   min-width: 82px;
   height: 34px;
   border-radius: var(--radius);
-  font-size: 14px;
-  font-weight: 500;
+  font-size: var(--type-section-title);
+  font-weight: var(--weight-medium);
 }
 
 .btn-primary {

@@ -126,16 +126,6 @@ func (a *App) OpenInVSCode(dir string) error {
 	return cmd.Start()
 }
 
-func (a *App) OpenInFileExplorer(dir string) error {
-	dir, err := existingDirectory(dir)
-	if err != nil {
-		return err
-	}
-	cmd := exec.Command("explorer.exe", dir)
-	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	return cmd.Start()
-}
-
 func existingDirectory(dir string) (string, error) {
 	dir = strings.TrimSpace(dir)
 	if dir == "" {

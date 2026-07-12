@@ -52,8 +52,7 @@
             <div class="input-action">
               <input v-model.trim="form.workDir" class="inp" placeholder="C:\Projects\demo" />
               <button class="btn-ghost" @click="chooseWorkDir">选择</button>
-              <button class="directory-action-btn" type="button" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir(form.workDir, 'vscode', true)"><UiIcon name="terminal" :size="15" /></button>
-              <button class="directory-action-btn" type="button" :disabled="!form.workDir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir(form.workDir, 'explorer', true)"><UiIcon name="folderOpen" :size="15" /></button>
+              <button class="directory-action-btn" type="button" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir(form.workDir, true)"><UiIcon name="terminal" :size="15" /></button>
             </div>
           </label>
 
@@ -110,8 +109,7 @@
               <div class="workdir-value">
                 <code>{{ selected.work_dir || '未设置' }}</code>
                 <span class="workdir-actions">
-                  <button class="icon-btn-xs" :disabled="!selected.work_dir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir(selected.work_dir, 'vscode')"><UiIcon name="terminal" :size="13" /></button>
-                  <button class="icon-btn-xs" :disabled="!selected.work_dir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir(selected.work_dir, 'explorer')"><UiIcon name="folderOpen" :size="13" /></button>
+                  <button class="icon-btn-xs" :disabled="!selected.work_dir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir(selected.work_dir)"><UiIcon name="terminal" :size="13" /></button>
                 </span>
               </div>
             </div>
@@ -223,7 +221,6 @@ import {
   GetServicePortStatus,
   ListServices,
   OpenDirectoryDialog,
-  OpenInFileExplorer,
   OpenInVSCode,
   RestartService,
   SetServiceAutoStart,
@@ -440,13 +437,12 @@ async function selectService(s) {
   await loadPortStatus(s.id)
 }
 
-async function openWorkDir(dir, target, inForm = false) {
+async function openWorkDir(dir, inForm = false) {
   if (!dir) return
   if (inForm) formError.value = ''
   else actionError.value = ''
   try {
-    if (target === 'vscode') await OpenInVSCode(dir)
-    else await OpenInFileExplorer(dir)
+    await OpenInVSCode(dir)
   } catch (error) {
     if (inForm) formError.value = normalizeError(error)
     else actionError.value = normalizeError(error)
@@ -639,15 +635,15 @@ onUnmounted(() => {
 }
 
 .sv-header h2 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: var(--type-page-title);
+  font-weight: var(--weight-semibold);
 }
 
 .sv-subtitle {
   display: block;
   margin-top: 2px;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .services-shell {
@@ -700,8 +696,8 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
 }
 
 .service-row-main small {
@@ -709,13 +705,14 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-muted);
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: var(--type-code);
+  font-weight: var(--weight-regular);
 }
 
 .mini-status {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--type-caption);
   white-space: nowrap;
 }
 
@@ -781,8 +778,8 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--type-object-title);
+  font-weight: var(--weight-semibold);
 }
 
 .toolbar-actions,
@@ -811,7 +808,7 @@ onUnmounted(() => {
 .field span,
 .toggle-row {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .meta-grid strong,
@@ -820,11 +817,13 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--type-body);
+  font-weight: var(--weight-regular);
 }
 
 .meta-grid code {
-  font-family: Consolas, 'Courier New', monospace;
+  font-family: var(--mono);
+  font-size: var(--type-code);
 }
 
 .meta-wide {
@@ -952,7 +951,11 @@ onUnmounted(() => {
 
 .port-status-info small {
   color: var(--text-muted);
-  font-size: 11px;
+  font-size: var(--type-caption);
+}
+
+.port-status-info strong {
+  font-weight: var(--weight-medium);
 }
 
 .toggle-row {
@@ -969,7 +972,8 @@ onUnmounted(() => {
 
 .switch-row strong {
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--type-body);
+  font-weight: var(--weight-regular);
 }
 
 .inp {
@@ -980,7 +984,7 @@ onUnmounted(() => {
   border-radius: var(--radius-sm);
   padding: 7px 10px;
   color: var(--text);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .inp:focus {
@@ -990,7 +994,7 @@ onUnmounted(() => {
 .form-error,
 .action-error {
   color: var(--red);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .log-panel {
@@ -1011,7 +1015,7 @@ onUnmounted(() => {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   color: var(--text-dim);
-  font-size: 13px;
+  font-size: var(--type-body);
   flex-shrink: 0;
 }
 
@@ -1020,15 +1024,15 @@ onUnmounted(() => {
   overflow-y: auto;
   padding: 8px 12px;
   background: var(--bg);
-  font-family: Consolas, 'Courier New', monospace;
-  font-size: 12px;
+  font-family: var(--mono);
+  font-size: var(--type-code);
 }
 
 .log-line {
   display: grid;
   grid-template-columns: 62px minmax(0, 1fr);
   gap: 8px;
-  line-height: 1.6;
+  line-height: var(--line-code);
   color: var(--text);
   text-align: left;
 }
@@ -1050,7 +1054,7 @@ onUnmounted(() => {
 .empty-list,
 .empty-detail {
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: var(--type-body);
 }
 
 .empty-list {
@@ -1069,8 +1073,8 @@ onUnmounted(() => {
 
 .empty-detail h3 {
   color: var(--text-dim);
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--type-object-title);
+  font-weight: var(--weight-semibold);
 }
 
 .status-dot {
@@ -1099,8 +1103,8 @@ onUnmounted(() => {
 }
 
 .badge {
-  font-size: 11px;
-  font-weight: 500;
+  font-size: var(--type-caption);
+  font-weight: var(--weight-medium);
   padding: 2px 8px;
   border-radius: 999px;
 }
@@ -1137,8 +1141,8 @@ onUnmounted(() => {
   border: none;
   padding: 6px 14px;
   border-radius: var(--radius-sm);
-  font-size: 13px;
-  font-weight: 500;
+  font-size: var(--type-body);
+  font-weight: var(--weight-medium);
 }
 
 .btn-primary:hover {
@@ -1151,7 +1155,7 @@ onUnmounted(() => {
   background: transparent;
   color: var(--text-dim);
   border-radius: var(--radius-sm);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .btn-ghost {
@@ -1193,7 +1197,7 @@ onUnmounted(() => {
 
 .btn-xs {
   padding: 2px 8px;
-  font-size: 11px;
+  font-size: var(--type-caption);
 }
 
 .modal-overlay {
@@ -1228,14 +1232,14 @@ onUnmounted(() => {
 
 .conflict-header h3 {
   margin-bottom: 4px;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: var(--type-object-title);
+  font-weight: var(--weight-semibold);
 }
 
 .conflict-header span,
 .conflict-details span {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: var(--type-label);
 }
 
 .conflict-details {
@@ -1259,7 +1263,7 @@ onUnmounted(() => {
 .conflict-details code {
   overflow: hidden;
   color: var(--text-dim);
-  font-size: 12px;
+  font-size: var(--type-label);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

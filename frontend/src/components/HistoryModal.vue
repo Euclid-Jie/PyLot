@@ -54,8 +54,8 @@ function statusText(status) { return labels[status] || status }
 <style scoped>
 .history-dialog { width: min(760px, calc(100vw - 40px)); height: min(520px, calc(100vh - 40px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
 header { min-height: 66px; display: flex; align-items: flex-start; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--border); }
-header span { color: var(--text-muted); font-size: 12px; }
-h3 { font-size: 17px; font-weight: 600; }
+header span { color: var(--text-muted); font-size: var(--type-label); }
+h3 { font-size: var(--type-object-title); font-weight: var(--weight-semibold); }
 .history-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 240px minmax(0, 1fr); }
 .record-list { overflow-y: auto; border-right: 1px solid var(--border); background: var(--sidebar-bg); }
 .record-item { width: 100%; min-height: 54px; display: grid; grid-template-columns: 8px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 12px; border: 0; border-bottom: 1px solid var(--border); background: transparent; color: var(--text); text-align: left; }
@@ -64,11 +64,11 @@ h3 { font-size: 17px; font-weight: 600; }
 .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
 .status-dot.success { background: var(--green); } .status-dot.error, .status-dot.killed, .status-dot.timeout { background: var(--red); } .status-dot.running { background: var(--accent); }
 .record-main { min-width: 0; display: flex; flex-direction: column; }
-.record-main strong { font-size: 12px; font-weight: 600; } .record-main small { overflow: hidden; color: var(--text-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.error-label { color: var(--red); font-size: 11px; }
+.record-main strong { font-size: var(--type-label); font-weight: var(--weight-semibold); } .record-main small { overflow: hidden; color: var(--text-muted); font-size: var(--type-caption); text-overflow: ellipsis; white-space: nowrap; }
+.error-label { color: var(--red); font-size: var(--type-caption); }
 .detail-log { min-width: 0; min-height: 0; padding: 12px; background: var(--bg); }
-.log-body { height: 100%; overflow: auto; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); font-family: var(--mono); font-size: 12px; }
-.log-line { color: var(--text-dim); line-height: 1.65; white-space: pre-wrap; word-break: break-all; }
-.empty { padding: 20px; color: var(--text-muted); font-size: 12px; text-align: center; }
+.log-body { height: 100%; overflow: auto; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--input-bg); font-family: var(--mono); font-size: var(--type-code); font-weight: var(--weight-regular); }
+.log-line { color: var(--text-dim); line-height: var(--line-code); white-space: pre-wrap; word-break: break-all; }
+.empty { padding: 20px; color: var(--text-muted); font-size: var(--type-label); text-align: center; }
 .detail-empty { height: 100%; display: grid; place-items: center; }
 </style>

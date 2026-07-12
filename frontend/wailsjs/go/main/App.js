@@ -114,10 +114,6 @@ export function OpenFileDialog(arg1) {
   return window['go']['main']['App']['OpenFileDialog'](arg1);
 }
 
-export function OpenInFileExplorer(arg1) {
-  return window['go']['main']['App']['OpenInFileExplorer'](arg1);
-}
-
 export function OpenInVSCode(arg1) {
   return window['go']['main']['App']['OpenInVSCode'](arg1);
 }

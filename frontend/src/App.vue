@@ -52,6 +52,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { EventsOn } from '../wailsjs/runtime/runtime.js'
 import { GetRunningScripts, GetRunningWorkflows, GetWindowSize, SetWindowSize } from '../wailsjs/go/main/App.js'
 import { useMainStore } from './stores/main.js'
+import { resolveFont } from './utils/font.js'
 import LogPanel from './components/LogPanel.vue'
 import ScheduleView from './components/ScheduleView.vue'
 import ScriptConfig from './components/ScriptConfig.vue'
@@ -91,9 +92,8 @@ async function saveWindowState() {
 
 onMounted(async () => {
   const theme = localStorage.getItem('theme') || 'dark'
-  const font = localStorage.getItem('font') || '"Segoe UI Variable", "Microsoft YaHei UI", "Segoe UI", sans-serif'
   document.documentElement.setAttribute('data-theme', theme)
-  document.documentElement.style.setProperty('--font', font)
+  document.documentElement.style.setProperty('--font', resolveFont())
 
   const savedW = parseInt(localStorage.getItem('winW'))
   const savedH = parseInt(localStorage.getItem('winH'))
@@ -127,18 +127,18 @@ onUnmounted(() => {
 .content-area.no-pad { padding: 0; overflow: hidden; }
 .empty-state { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; text-align: center; }
 .empty-icon { width: 56px; height: 56px; display: grid; place-items: center; margin-bottom: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); color: var(--accent); }
-.empty-state h1 { margin-bottom: 7px; color: var(--text); font-size: 20px; font-weight: 600; }
-.empty-state p { max-width: 430px; color: var(--text-muted); font-size: 13px; }
+.empty-state h1 { margin-bottom: 7px; color: var(--text); font-size: var(--type-page-title); font-weight: var(--weight-semibold); }
+.empty-state p { max-width: 430px; color: var(--text-muted); font-size: var(--type-body); }
 .empty-actions { display: flex; gap: 8px; margin-top: 22px; }
 .log-footer { position: relative; min-height: 140px; flex-shrink: 0; border-top: 1px solid var(--border); }
 .resize-handle { position: absolute; z-index: 10; top: -3px; right: 0; left: 0; height: 6px; cursor: ns-resize; }
 .resize-handle:hover { background: var(--accent); }
 .log-collapsed { position: absolute; right: 14px; bottom: 14px; z-index: 20; min-height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-raised); color: var(--text-dim); box-shadow: 0 6px 20px rgba(0, 0, 0, .22); }
 .log-collapsed:hover { border-color: var(--border-strong); color: var(--text); }
-.log-collapsed strong { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); font-size: 11px; }
+.log-collapsed strong { min-width: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent-dim); color: var(--accent); font-size: var(--type-caption); }
 .alert-box { width: min(460px, calc(100vw - 40px)); display: grid; grid-template-columns: 34px 1fr auto; align-items: flex-start; gap: 12px; padding: 18px; border: 1px solid rgba(248, 81, 73, .38); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: var(--shadow-dialog); }
-.alert-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--red-dim); color: var(--red); font-weight: 700; }
-.alert-content strong { color: var(--text); font-size: 14px; }
-.alert-content p { margin-top: 5px; color: var(--text-dim); font-size: 13px; }
+.alert-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--red-dim); color: var(--red); font-weight: var(--weight-semibold); }
+.alert-content strong { color: var(--text); font-size: var(--type-section-title); font-weight: var(--weight-semibold); }
+.alert-content p { margin-top: 5px; color: var(--text-dim); font-size: var(--type-body); }
 @media (max-width: 900px) { .sidebar { width: 220px; min-width: 220px; } .content-area { padding: 20px; } }
 </style>
