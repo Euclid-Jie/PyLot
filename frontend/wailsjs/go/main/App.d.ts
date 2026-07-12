@@ -60,6 +60,8 @@ export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string):Promise<string>;
 
+export function OpenInFileExplorer(arg1:string):Promise<void>;
+
 export function OpenInVSCode(arg1:string):Promise<void>;
 
 export function RestartService(arg1:number):Promise<void>;

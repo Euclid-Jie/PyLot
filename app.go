@@ -98,22 +98,61 @@ func (a *App) SetWindowSize(w, h int) {
 	runtime.WindowSetSize(a.ctx, w, h)
 }
 
-func (a *App) OpenInVSCode(dir string) {
+func (a *App) OpenInVSCode(dir string) error {
+	dir, err := existingDirectory(dir)
+	if err != nil {
+		return err
+	}
 	candidates := []string{
 		filepath.Join(os.Getenv("LOCALAPPDATA"), `Programs\Microsoft VS Code\bin\code.cmd`),
 		filepath.Join(os.Getenv("ProgramFiles"), `Microsoft VS Code\bin\code.cmd`),
 		filepath.Join(os.Getenv("ProgramW6432"), `Microsoft VS Code\bin\code.cmd`),
 	}
-	codePath := "code"
+	codePath := ""
 	for _, p := range candidates {
 		if _, err := os.Stat(p); err == nil {
 			codePath = p
 			break
 		}
 	}
+	if codePath == "" {
+		codePath, err = exec.LookPath("code")
+		if err != nil {
+			return fmt.Errorf("未找到 VS Code 命令，请确认已安装 VS Code 并将 code 加入 PATH")
+		}
+	}
 	cmd := exec.Command("cmd", "/c", codePath, dir)
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
-	cmd.Start()
+	return cmd.Start()
+}
+
+func (a *App) OpenInFileExplorer(dir string) error {
+	dir, err := existingDirectory(dir)
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("explorer.exe", dir)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
+	return cmd.Start()
+}
+
+func existingDirectory(dir string) (string, error) {
+	dir = strings.TrimSpace(dir)
+	if dir == "" {
+		return "", fmt.Errorf("工作目录不能为空")
+	}
+	absDir, err := filepath.Abs(dir)
+	if err != nil {
+		return "", fmt.Errorf("解析工作目录失败: %w", err)
+	}
+	info, err := os.Stat(absDir)
+	if err != nil {
+		return "", fmt.Errorf("工作目录不存在: %s", absDir)
+	}
+	if !info.IsDir() {
+		return "", fmt.Errorf("工作目录不是文件夹: %s", absDir)
+	}
+	return absDir, nil
 }
 
 type ScriptInferResult struct {
@@ -733,9 +772,11 @@ type ServicePortStatus struct {
 	URL                string `json:"url"`
 	Listening          bool   `json:"listening"`
 	PID                int    `json:"pid"`
+	ParentPID          int    `json:"parent_pid"`
 	ProcessName        string `json:"process_name"`
 	ProcessPath        string `json:"process_path"`
 	ManagedServiceID   int64  `json:"managed_service_id"`
+	ManagedServicePID  int    `json:"managed_service_pid"`
 	ManagedServiceName string `json:"managed_service_name"`
 }
 
@@ -931,11 +972,21 @@ func (a *App) GetServicePortStatus(id int64) (ServicePortStatus, error) {
 	}
 	status.Listening = true
 	status.PID = owner.PID
+	status.ParentPID = owner.ParentPID
 	status.ProcessName = owner.ProcessName
 	status.ProcessPath = owner.ProcessPath
-	for _, item := range a.ListServices() {
-		if item.PID == owner.PID {
+	services := a.ListServices()
+	rootPIDs := make([]int, 0, len(services))
+	for _, item := range services {
+		if item.PID > 0 {
+			rootPIDs = append(rootPIDs, item.PID)
+		}
+	}
+	rootPID := svc.FindProcessTreeRoot(owner.PID, rootPIDs)
+	for _, item := range services {
+		if item.PID == rootPID {
 			status.ManagedServiceID = item.ID
+			status.ManagedServicePID = item.PID
 			status.ManagedServiceName = item.Name
 			break
 		}

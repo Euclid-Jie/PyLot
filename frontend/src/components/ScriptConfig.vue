@@ -53,6 +53,8 @@
         <label>工作目录</label>
         <input v-model="form.workDir" class="ui-input ui-mono" />
         <button class="ui-btn" @click="browseDir"><UiIcon name="folder" />选择</button>
+        <button class="ui-icon-btn workdir-icon-btn" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir('vscode')"><UiIcon name="terminal" /></button>
+        <button class="ui-icon-btn workdir-icon-btn" :disabled="!form.workDir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir('explorer')"><UiIcon name="folderOpen" /></button>
       </div>
 
       <div class="form-section">
@@ -92,7 +94,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
-import { GetScript, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
+import { GetScript, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, OpenInFileExplorer, OpenInVSCode, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 import TempArgsModal from './TempArgsModal.vue'
 import TimerModal from './TimerModal.vue'
@@ -292,6 +294,16 @@ async function browseDir() {
   if (p) form.value.workDir = p
 }
 
+async function openWorkDir(target) {
+  actionError.value = ''
+  try {
+    if (target === 'vscode') await OpenInVSCode(form.value.workDir)
+    else await OpenInFileExplorer(form.value.workDir)
+  } catch (error) {
+    actionError.value = normalizeError(error)
+  }
+}
+
 function normalizeError(error) {
   return String(error?.message || error || '操作失败').replace(/^Error:\s*/i, '')
 }
@@ -352,6 +364,7 @@ fieldset:disabled { opacity: 0.4; pointer-events: none; }
 .label-inline { font-size: 13px; }
 .form-row input, .form-row select, .env-row input { min-height: var(--control-lg); padding: 7px 10px; border-color: var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text); font-size: 13px; }
 .form-row > button.ui-btn { min-height: var(--control-lg); padding: 0 12px; background: var(--surface); color: var(--text-dim); }
+.form-row > button.workdir-icon-btn { width: var(--control-lg); height: var(--control-lg); min-height: var(--control-lg); padding: 0; background: var(--surface); }
 .mode-toggle { background: var(--input-bg); }
 .mode-btn { min-height: 34px; padding: 0 18px; font-size: 13px; }
 .mode-btn.active { background: var(--accent-dim); color: var(--accent); }

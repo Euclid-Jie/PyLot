@@ -44,3 +44,32 @@ func TestFindPortOwnerRejectsInvalidPort(t *testing.T) {
 		}
 	}
 }
+
+func TestProcessBelongsToTree(t *testing.T) {
+	processes := map[int]processSnapshotEntry{
+		20008: {parentPID: 100},
+		30000: {parentPID: 20008},
+		55660: {parentPID: 30000},
+		99999: {parentPID: 100},
+	}
+	if !processBelongsToTree(55660, 20008, processes) {
+		t.Fatal("listener child was not associated with its service root")
+	}
+	if processBelongsToTree(99999, 20008, processes) {
+		t.Fatal("unrelated process was associated with the service root")
+	}
+	root := findProcessTreeRoot(55660, map[int]struct{}{100: {}, 20008: {}}, processes)
+	if root != 20008 {
+		t.Fatalf("matched root PID = %d, want 20008", root)
+	}
+}
+
+func TestProcessBelongsToTreeHandlesCycles(t *testing.T) {
+	processes := map[int]processSnapshotEntry{
+		10: {parentPID: 11},
+		11: {parentPID: 10},
+	}
+	if processBelongsToTree(10, 20, processes) {
+		t.Fatal("cyclic parent chain matched an unrelated root")
+	}
+}

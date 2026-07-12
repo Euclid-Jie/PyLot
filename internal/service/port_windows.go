@@ -25,8 +25,14 @@ var getExtendedTCPTable = windows.NewLazySystemDLL("iphlpapi.dll").NewProc("GetE
 
 type PortOwner struct {
 	PID         int    `json:"pid"`
+	ParentPID   int    `json:"parent_pid"`
 	ProcessName string `json:"process_name"`
 	ProcessPath string `json:"process_path"`
+}
+
+type processSnapshotEntry struct {
+	parentPID int
+	name      string
 }
 
 type mibTCPRowOwnerPID struct {
@@ -68,8 +74,39 @@ func FindPortOwner(port int) (*PortOwner, error) {
 		return nil, nil
 	}
 
-	name, path := processInfo(pid)
-	return &PortOwner{PID: pid, ProcessName: name, ProcessPath: path}, nil
+	name, path, parentPID := processInfo(pid)
+	return &PortOwner{PID: pid, ParentPID: parentPID, ProcessName: name, ProcessPath: path}, nil
+}
+
+func ProcessBelongsToTree(processPID, rootPID int) bool {
+	if processPID <= 0 || rootPID <= 0 {
+		return false
+	}
+	if processPID == rootPID {
+		return true
+	}
+	processes, err := snapshotProcesses()
+	if err != nil {
+		return false
+	}
+	return processBelongsToTree(processPID, rootPID, processes)
+}
+
+func FindProcessTreeRoot(processPID int, rootPIDs []int) int {
+	if processPID <= 0 || len(rootPIDs) == 0 {
+		return 0
+	}
+	processes, err := snapshotProcesses()
+	if err != nil {
+		return 0
+	}
+	roots := make(map[int]struct{}, len(rootPIDs))
+	for _, pid := range rootPIDs {
+		if pid > 0 {
+			roots[pid] = struct{}{}
+		}
+	}
+	return findProcessTreeRoot(processPID, roots, processes)
 }
 
 func KillPortOwner(port, expectedPID int) error {
@@ -161,7 +198,16 @@ func tcpPort(raw uint32) int {
 	return int(bits.ReverseBytes16(uint16(raw)))
 }
 
-func processInfo(pid int) (string, string) {
+func processInfo(pid int) (string, string, int) {
+	var name string
+	var parentPID int
+	if processes, err := snapshotProcesses(); err == nil {
+		if process, ok := processes[pid]; ok {
+			name = process.name
+			parentPID = process.parentPID
+		}
+	}
+
 	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
 	if err == nil {
 		defer windows.CloseHandle(h)
@@ -169,29 +215,61 @@ func processInfo(pid int) (string, string) {
 		size := uint32(len(buf))
 		if err := windows.QueryFullProcessImageName(h, 0, &buf[0], &size); err == nil {
 			path := windows.UTF16ToString(buf[:size])
-			return filepath.Base(path), path
+			if name == "" {
+				name = filepath.Base(path)
+			}
+			return name, path, parentPID
 		}
 	}
+	return name, "", parentPID
+}
 
+func snapshotProcesses() (map[int]processSnapshotEntry, error) {
 	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
 	if err != nil {
-		return "", ""
+		return nil, err
 	}
 	defer windows.CloseHandle(snapshot)
+
+	processes := make(map[int]processSnapshotEntry)
 	entry := windows.ProcessEntry32{Size: uint32(unsafe.Sizeof(windows.ProcessEntry32{}))}
 	if err := windows.Process32First(snapshot, &entry); err != nil {
-		return "", ""
+		return nil, err
 	}
 	for {
-		if int(entry.ProcessID) == pid {
-			return windows.UTF16ToString(entry.ExeFile[:]), ""
+		processes[int(entry.ProcessID)] = processSnapshotEntry{
+			parentPID: int(entry.ParentProcessID),
+			name:      windows.UTF16ToString(entry.ExeFile[:]),
 		}
 		if err := windows.Process32Next(snapshot, &entry); err != nil {
 			if errors.Is(err, syscall.ERROR_NO_MORE_FILES) {
 				break
 			}
-			break
+			return nil, err
 		}
 	}
-	return "", ""
+	return processes, nil
+}
+
+func processBelongsToTree(processPID, rootPID int, processes map[int]processSnapshotEntry) bool {
+	return findProcessTreeRoot(processPID, map[int]struct{}{rootPID: {}}, processes) == rootPID
+}
+
+func findProcessTreeRoot(processPID int, rootPIDs map[int]struct{}, processes map[int]processSnapshotEntry) int {
+	visited := make(map[int]struct{})
+	for processPID > 0 {
+		if _, isRoot := rootPIDs[processPID]; isRoot {
+			return processPID
+		}
+		if _, seen := visited[processPID]; seen {
+			return 0
+		}
+		visited[processPID] = struct{}{}
+		process, ok := processes[processPID]
+		if !ok || process.parentPID == processPID {
+			return 0
+		}
+		processPID = process.parentPID
+	}
+	return 0
 }

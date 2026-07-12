@@ -345,9 +345,11 @@ export namespace main {
 	    url: string;
 	    listening: boolean;
 	    pid: number;
+	    parent_pid: number;
 	    process_name: string;
 	    process_path: string;
 	    managed_service_id: number;
+	    managed_service_pid: number;
 	    managed_service_name: string;
 
 	    static createFrom(source: any = {}) {
@@ -362,15 +364,16 @@ export namespace main {
 	        this.url = source["url"];
 	        this.listening = source["listening"];
 	        this.pid = source["pid"];
+	        this.parent_pid = source["parent_pid"];
 	        this.process_name = source["process_name"];
 	        this.process_path = source["process_path"];
 	        this.managed_service_id = source["managed_service_id"];
+	        this.managed_service_pid = source["managed_service_pid"];
 	        this.managed_service_name = source["managed_service_name"];
 	    }
 	}
 
 }
-
 export namespace scheduler {
 	
 	export class ScheduleInfo {

@@ -52,6 +52,8 @@
             <div class="input-action">
               <input v-model.trim="form.workDir" class="inp" placeholder="C:\Projects\demo" />
               <button class="btn-ghost" @click="chooseWorkDir">选择</button>
+              <button class="directory-action-btn" type="button" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir(form.workDir, 'vscode', true)"><UiIcon name="terminal" :size="15" /></button>
+              <button class="directory-action-btn" type="button" :disabled="!form.workDir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir(form.workDir, 'explorer', true)"><UiIcon name="folderOpen" :size="15" /></button>
             </div>
           </label>
 
@@ -105,7 +107,13 @@
             </div>
             <div>
               <span>工作目录</span>
-              <code>{{ selected.work_dir || '未设置' }}</code>
+              <div class="workdir-value">
+                <code>{{ selected.work_dir || '未设置' }}</code>
+                <span class="workdir-actions">
+                  <button class="icon-btn-xs" :disabled="!selected.work_dir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir(selected.work_dir, 'vscode')"><UiIcon name="terminal" :size="13" /></button>
+                  <button class="icon-btn-xs" :disabled="!selected.work_dir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir(selected.work_dir, 'explorer')"><UiIcon name="folderOpen" :size="13" /></button>
+                </span>
+              </div>
             </div>
             <div v-if="selected.port">
               <span>访问地址</span>
@@ -117,12 +125,15 @@
             <div v-if="selected.port">
               <span>端口状态</span>
               <div class="port-status-row">
-                <strong :class="{ 'port-listening': selectedPortStatus?.listening }">{{ portStatusLabel }}</strong>
+                <span class="port-status-info">
+                  <strong :class="{ 'port-listening': selectedPortStatus?.listening }">{{ portStatusLabel }}</strong>
+                  <small v-if="listenerBelongsToSelected">当前服务的子进程</small>
+                </span>
                 <button class="icon-btn-xs" title="刷新端口状态" @click="loadPortStatus(selected.id)"><UiIcon name="refresh" :size="13" /></button>
               </div>
             </div>
             <div>
-              <span>PID</span>
+              <span>启动进程 PID</span>
               <strong>{{ selected.pid || '-' }}</strong>
             </div>
             <div>
@@ -212,6 +223,8 @@ import {
   GetServicePortStatus,
   ListServices,
   OpenDirectoryDialog,
+  OpenInFileExplorer,
+  OpenInVSCode,
   RestartService,
   SetServiceAutoStart,
   StartService,
@@ -249,9 +262,13 @@ const selectedPortStatus = computed(() => selectedId.value === null ? null : (po
 const portStatusLabel = computed(() => {
   const status = selectedPortStatus.value
   if (!status) return '检测中'
-  if (status.listening) return `正在监听 · PID ${status.pid}`
+  if (status.listening) return `正在监听 · ${status.process_name || '未知进程'} · PID ${status.pid}`
   if (selected.value?.running) return '进程运行中，端口尚未监听'
   return '未监听'
+})
+const listenerBelongsToSelected = computed(() => {
+  const status = selectedPortStatus.value
+  return status?.listening && status.managed_service_id === selectedId.value && status.pid !== selected.value?.pid
 })
 watch(form, () => {
   if (showForm.value && !formHydrating) store.markDirty()
@@ -423,6 +440,19 @@ async function selectService(s) {
   await loadPortStatus(s.id)
 }
 
+async function openWorkDir(dir, target, inForm = false) {
+  if (!dir) return
+  if (inForm) formError.value = ''
+  else actionError.value = ''
+  try {
+    if (target === 'vscode') await OpenInVSCode(dir)
+    else await OpenInFileExplorer(dir)
+  } catch (error) {
+    if (inForm) formError.value = normalizeError(error)
+    else actionError.value = normalizeError(error)
+  }
+}
+
 async function loadPortStatus(id) {
   const service = services.value.find(item => item.id === id)
   if (!service?.port) {
@@ -551,6 +581,7 @@ function normalizeError(e) {
 function applyStatus(d) {
   const s = services.value.find(item => item.id === d.id)
   if (!s) return
+  if (d.status === 'starting') logs[d.id] = []
   Object.assign(s, {
     running: d.running,
     status: d.status,
@@ -824,6 +855,50 @@ onUnmounted(() => {
   flex: 1;
 }
 
+.directory-action-btn {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+}
+
+.directory-action-btn:hover:not(:disabled) {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.directory-action-btn:disabled,
+.icon-btn-xs:disabled {
+  opacity: .4;
+}
+
+.workdir-value,
+.workdir-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+}
+
+.workdir-value {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.workdir-value code {
+  min-width: 0;
+}
+
+.workdir-actions {
+  flex: 0 0 auto;
+  gap: 4px;
+}
+
 .address-row,
 .port-status-row {
   min-width: 0;
@@ -859,6 +934,25 @@ onUnmounted(() => {
 
 .port-listening {
   color: var(--green) !important;
+}
+
+.port-status-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.port-status-info strong,
+.port-status-info small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.port-status-info small {
+  color: var(--text-muted);
+  font-size: 11px;
 }
 
 .toggle-row {

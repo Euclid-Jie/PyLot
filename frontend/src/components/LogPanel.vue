@@ -7,11 +7,13 @@
         <button class="ui-btn small" :class="{ active: errorsOnly }" @click="errorsOnly = !errorsOnly">仅看错误</button>
         <button class="ui-icon-btn" :class="{ active: autoFollow }" :title="autoFollow ? '暂停自动滚动' : '开启自动滚动'" :aria-label="autoFollow ? '暂停自动滚动' : '开启自动滚动'" @click="autoFollow = !autoFollow"><UiIcon :name="autoFollow ? 'pause' : 'play'" /></button>
         <button class="ui-icon-btn" title="历史记录" aria-label="历史记录" @click="showHistory = true"><UiIcon name="history" /></button>
-        <button class="ui-icon-btn" :disabled="!workDir" title="在 VSCode 中打开工作目录" aria-label="在 VSCode 中打开工作目录" @click="openVSCode"><UiIcon name="folder" /></button>
+        <button class="ui-icon-btn" :disabled="!workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir('vscode')"><UiIcon name="terminal" /></button>
+        <button class="ui-icon-btn" :disabled="!workDir" title="在文件夹中打开工作目录" aria-label="在文件夹中打开工作目录" @click="openWorkDir('explorer')"><UiIcon name="folderOpen" /></button>
         <button class="ui-icon-btn" title="清空输出" aria-label="清空输出" @click="store.clearLogs()"><UiIcon name="delete" /></button>
         <button class="ui-icon-btn" title="折叠输出面板" aria-label="折叠输出面板" @click="$emit('collapse')"><UiIcon name="chevronDown" /></button>
       </div>
     </div>
+    <div v-if="openError" class="log-tool-error" role="alert">{{ openError }}</div>
     <div ref="logBody" class="log-body" @scroll="handleScroll">
       <div v-for="(entry, index) in filteredLogs" :key="index" :class="['log-line', { error: entry.isError }]">
         <span class="log-time">{{ entry.timestamp }}</span><span>{{ entry.line }}</span>
@@ -24,7 +26,7 @@
 
 <script setup>
 import { computed, nextTick, ref, watch } from 'vue'
-import { OpenInVSCode } from '../../wailsjs/go/main/App.js'
+import { OpenInFileExplorer, OpenInVSCode } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 import HistoryModal from './HistoryModal.vue'
 import UiIcon from './UiIcon.vue'
@@ -36,6 +38,7 @@ const showHistory = ref(false)
 const query = ref('')
 const errorsOnly = ref(false)
 const autoFollow = ref(true)
+const openError = ref('')
 const workDir = computed(() => store.selectedScriptWorkDir || '')
 const filteredLogs = computed(() => {
   const keyword = query.value.toLocaleLowerCase()
@@ -53,7 +56,16 @@ function handleScroll() {
   const distance = logBody.value.scrollHeight - logBody.value.scrollTop - logBody.value.clientHeight
   if (distance > 48) autoFollow.value = false
 }
-async function openVSCode() { if (workDir.value) await OpenInVSCode(workDir.value) }
+async function openWorkDir(target) {
+  if (!workDir.value) return
+  openError.value = ''
+  try {
+    if (target === 'vscode') await OpenInVSCode(workDir.value)
+    else await OpenInFileExplorer(workDir.value)
+  } catch (error) {
+    openError.value = String(error?.message || error || '打开工作目录失败').replace(/^Error:\s*/i, '')
+  }
+}
 </script>
 
 <style scoped>
@@ -67,6 +79,7 @@ async function openVSCode() { if (workDir.value) await OpenInVSCode(workDir.valu
 .log-search:focus-within { border-color: var(--accent); }
 .log-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--text); font-size: 12px; }
 .ui-btn.active, .ui-icon-btn.active { border-color: rgba(59, 130, 246, .35); background: var(--accent-dim); color: var(--accent); }
+.log-tool-error { padding: 6px 14px; border-bottom: 1px solid rgba(248, 81, 73, .28); background: var(--red-dim); color: var(--red); font-size: 12px; }
 .log-body { min-height: 0; flex: 1; overflow: auto; padding: 8px 14px; font-family: var(--mono); font-size: 12px; line-height: 1.65; }
 .log-line { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 8px; color: var(--text-dim); }
 .log-line span:last-child { white-space: pre-wrap; word-break: break-all; }
