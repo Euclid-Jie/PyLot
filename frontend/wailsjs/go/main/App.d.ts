@@ -72,6 +72,8 @@ export function SaveGlobalConfig(arg1:db.GlobalConfig):Promise<void>;
 
 export function SaveSchedule(arg1:db.Schedule):Promise<void>;
 
+export function SaveSchedules(arg1:Array<db.Schedule>):Promise<void>;
+
 export function SaveWorkflow(arg1:db.Workflow):Promise<number>;
 
 export function SetServiceAutoStart(arg1:number,arg2:boolean):Promise<void>;

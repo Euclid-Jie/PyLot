@@ -440,46 +440,103 @@ func (a *App) GetSchedules() []db.Schedule {
 }
 
 func (a *App) SaveSchedule(s db.Schedule) error {
-	s.CronExpr = scheduler.NormalizeCron(s.CronExpr)
-	if err := scheduler.ValidateCron(s.CronExpr); err != nil {
+	return a.SaveSchedules([]db.Schedule{s})
+}
+
+func (a *App) SaveSchedules(schedules []db.Schedule) error {
+	if len(schedules) == 0 {
+		return fmt.Errorf("no schedules to save")
+	}
+
+	seenIDs := map[int]bool{}
+	for i := range schedules {
+		schedules[i].CronExpr = scheduler.NormalizeCron(schedules[i].CronExpr)
+		if err := scheduler.ValidateCron(schedules[i].CronExpr); err != nil {
+			return fmt.Errorf("schedule %d: %w", i+1, err)
+		}
+		if schedules[i].Enabled != 1 {
+			schedules[i].Enabled = 0
+		}
+		if schedules[i].ID != 0 {
+			if seenIDs[schedules[i].ID] {
+				return fmt.Errorf("schedule %d repeats id %d", i+1, schedules[i].ID)
+			}
+			seenIDs[schedules[i].ID] = true
+		}
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
 		return err
 	}
 
-	if s.ID == 0 {
-		res, err := db.DB.Exec(`INSERT INTO schedules(script_id,cron_expr,enabled,created_at) VALUES(?,?,?,?)`,
-			s.ScriptID, s.CronExpr, s.Enabled, time.Now())
-		if err != nil {
+	type oldSchedule struct {
+		id       int
+		scriptID int
+		cronExpr string
+		enabled  int
+	}
+
+	oldSchedules := []oldSchedule{}
+	savedSchedules := make([]db.Schedule, 0, len(schedules))
+	now := time.Now()
+
+	for _, s := range schedules {
+		if s.ID == 0 {
+			res, err := tx.Exec(`INSERT INTO schedules(script_id,cron_expr,enabled,created_at) VALUES(?,?,?,?)`,
+				s.ScriptID, s.CronExpr, s.Enabled, now)
+			if err != nil {
+				tx.Rollback()
+				return err
+			}
+			id, _ := res.LastInsertId()
+			s.ID = int(id)
+			savedSchedules = append(savedSchedules, s)
+			continue
+		}
+
+		var old oldSchedule
+		old.id = s.ID
+		if err := tx.QueryRow(`SELECT script_id,cron_expr,enabled FROM schedules WHERE id=?`, s.ID).Scan(&old.scriptID, &old.cronExpr, &old.enabled); err != nil {
+			tx.Rollback()
 			return err
 		}
-		id, _ := res.LastInsertId()
-		s.ID = int(id)
+		oldSchedules = append(oldSchedules, old)
+		if _, err := tx.Exec(`UPDATE schedules SET script_id=?,cron_expr=?,enabled=? WHERE id=?`,
+			s.ScriptID, s.CronExpr, s.Enabled, s.ID); err != nil {
+			tx.Rollback()
+			return err
+		}
+		savedSchedules = append(savedSchedules, s)
+	}
+
+	restoreScheduler := func() {
+		for _, s := range savedSchedules {
+			scheduler.RemoveJob(s.ID)
+		}
+		for _, old := range oldSchedules {
+			if old.enabled == 1 {
+				_ = a.addScheduleJob(old.id, old.scriptID, old.cronExpr)
+			}
+		}
+	}
+
+	for _, old := range oldSchedules {
+		scheduler.RemoveJob(old.id)
+	}
+	for _, s := range savedSchedules {
 		if s.Enabled == 1 {
 			if err := a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr); err != nil {
-				db.DB.Exec(`DELETE FROM schedules WHERE id=?`, s.ID)
+				restoreScheduler()
+				tx.Rollback()
 				return err
 			}
 		}
-		return nil
 	}
 
-	var oldScriptID, oldEnabled int
-	var oldCronExpr string
-	if err := db.DB.QueryRow(`SELECT script_id,cron_expr,enabled FROM schedules WHERE id=?`, s.ID).Scan(&oldScriptID, &oldCronExpr, &oldEnabled); err != nil {
+	if err := tx.Commit(); err != nil {
+		restoreScheduler()
 		return err
-	}
-	if _, err := db.DB.Exec(`UPDATE schedules SET script_id=?,cron_expr=?,enabled=? WHERE id=?`,
-		s.ScriptID, s.CronExpr, s.Enabled, s.ID); err != nil {
-		return err
-	}
-	scheduler.RemoveJob(s.ID)
-	if s.Enabled == 1 {
-		if err := a.addScheduleJob(s.ID, s.ScriptID, s.CronExpr); err != nil {
-			db.DB.Exec(`UPDATE schedules SET script_id=?,cron_expr=?,enabled=? WHERE id=?`, oldScriptID, oldCronExpr, oldEnabled, s.ID)
-			if oldEnabled == 1 {
-				_ = a.addScheduleJob(s.ID, oldScriptID, oldCronExpr)
-			}
-			return err
-		}
 	}
 	return nil
 }

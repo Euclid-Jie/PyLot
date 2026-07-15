@@ -89,7 +89,12 @@
         <template v-else>
           <div class="field">
             <label>表达式</label>
-            <input class="cron-input" v-model.trim="customCron" placeholder="0 8 * * *" />
+            <textarea
+              class="cron-input cron-textarea"
+              v-model="customCron"
+              rows="8"
+              placeholder="30,45 9 * * 1-5&#10;0,15,30,45 10 * * 1-5"
+            ></textarea>
           </div>
           <div class="field field-top">
             <label>常用</label>
@@ -105,7 +110,7 @@
             <strong v-if="generatedCrons.length > 1">{{ generatedCrons.length }} 条</strong>
           </div>
           <div v-if="generatedCrons.length" class="cron-list">
-            <code v-for="expr in generatedCrons" :key="expr">{{ expr }}</code>
+            <code v-for="(expr, index) in generatedCrons" :key="`${expr}-${index}`">{{ expr }}</code>
           </div>
           <div v-else class="empty-preview">—</div>
         </div>
@@ -135,7 +140,7 @@
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { GetScripts, GetWorkflows, SaveSchedule } from '../../wailsjs/go/main/App.js'
+import { GetScheduleOverview, GetScripts, GetWorkflows, SaveSchedules } from '../../wailsjs/go/main/App.js'
 import UiIcon from './UiIcon.vue'
 
 const props = defineProps({
@@ -148,6 +153,7 @@ const emit = defineEmits(['close', 'saved'])
 
 const scripts = ref([])
 const workflows = ref([])
+const loadedSchedules = ref([])
 const selectedScriptId = ref(props.schedule?.scriptId ?? props.scriptId ?? 0)
 const scheduleMode = ref('preset')
 const presetType = ref('daily_once')
@@ -184,11 +190,11 @@ const customPresets = [
 ]
 
 const intervalLimit = computed(() => intervalUnit.value === 'minutes' ? 59 : 23)
+const effectiveExistingSchedules = computed(() => props.existingSchedules.length ? props.existingSchedules : loadedSchedules.value)
 
 const generatedCrons = computed(() => {
   if (scheduleMode.value === 'custom') {
-    const expr = normalizeCron(customCron.value)
-    return expr ? [expr] : []
+    return parseCronLines(customCron.value)
   }
 
   if (presetType.value === 'daily_once') {
@@ -217,7 +223,7 @@ const validationError = computed(() => {
   if (!selectedScriptId.value) {
     return allowTargetSelect.value ? '请选择脚本或工作流' : '请先保存脚本或工作流'
   }
-  if (scheduleMode.value === 'custom' && !normalizeCron(customCron.value)) {
+  if (scheduleMode.value === 'custom' && generatedCrons.value.length === 0) {
     return '请输入 cron 表达式'
   }
   if (presetType.value === 'weekly' && selectedDays.value.length === 0) {
@@ -229,35 +235,40 @@ const validationError = computed(() => {
   if (generatedCrons.value.some(expr => expr.split(' ').length !== 5)) {
     return 'cron 表达式需为 5 段'
   }
+  const duplicate = findDuplicateCron(generatedCrons.value)
+  if (duplicate) {
+    return `导入内容包含重复 cron：${duplicate}`
+  }
   return ''
 })
 
 const displayError = computed(() => actionError.value || validationError.value)
 const displayWarning = computed(() => {
   if (!enabled.value) return ''
-  const matches = generatedCrons.value.filter(expr => {
-    const normalized = normalizeCron(expr)
-    return props.existingSchedules.some(item => {
-      const id = item.scheduleId || item.id || 0
-      return id !== scheduleId.value &&
-        item.enabled &&
-        item.scriptId === selectedScriptId.value &&
-        normalizeCron(item.cronExpr) === normalized
-    })
-  })
-  if (!matches.length) return ''
-  return `已有相同启用规则：${matches.join('，')}，保存后可能重复触发`
+  const warnings = findCronConflicts(generatedCrons.value)
+  if (!warnings.length) return ''
+  const visible = warnings.slice(0, 3)
+  const suffix = warnings.length > visible.length ? `；另有 ${warnings.length - visible.length} 个冲突` : ''
+  return `可能重复触发：${visible.join('；')}${suffix}`
 })
 
 onMounted(async () => {
   applySchedule(props.schedule)
+  const schedulePromise = props.existingSchedules.length
+    ? Promise.resolve()
+    : GetScheduleOverview().then(items => {
+        loadedSchedules.value = items || []
+      })
   if (props.allowTargetSelect) {
     const [scriptList, workflowList] = await Promise.all([
       GetScripts(),
       GetWorkflows(),
+      schedulePromise,
     ])
     scripts.value = scriptList || []
     workflows.value = workflowList || []
+  } else {
+    await schedulePromise
   }
 })
 
@@ -283,6 +294,139 @@ function parseTime(value) {
 
 function normalizeCron(value) {
   return (value || '').trim().replace(/\s+/g, ' ')
+}
+
+function parseCronLines(value) {
+  return (value || '')
+    .split(/\r?\n/)
+    .map(line => normalizeCron(line))
+    .filter(Boolean)
+}
+
+function findDuplicateCron(crons) {
+  const seen = new Set()
+  for (const expr of crons) {
+    const normalized = normalizeCron(expr)
+    if (seen.has(normalized)) return normalized
+    seen.add(normalized)
+  }
+  return ''
+}
+
+function findCronConflicts(crons) {
+  const parsed = crons.map((expr, index) => ({
+    expr,
+    label: `导入第 ${index + 1} 行`,
+    parsed: parseCronFields(expr),
+  }))
+  const warnings = []
+
+  for (let i = 0; i < parsed.length; i++) {
+    for (let j = i + 1; j < parsed.length; j++) {
+      if (cronsOverlap(parsed[i].parsed, parsed[j].parsed)) {
+        warnings.push(`${parsed[i].label} 与 ${parsed[j].label}`)
+      }
+    }
+  }
+
+  const existing = effectiveExistingSchedules.value
+    .filter(item => {
+      const id = item.scheduleId || item.id || 0
+      return id !== scheduleId.value &&
+        item.enabled &&
+        item.scriptId === selectedScriptId.value
+    })
+    .map(item => ({
+      expr: normalizeCron(item.cronExpr),
+      label: `已有 #${item.scheduleId || item.id}`,
+      parsed: parseCronFields(item.cronExpr),
+    }))
+
+  for (const next of parsed) {
+    for (const current of existing) {
+      if (normalizeCron(next.expr) === current.expr || cronsOverlap(next.parsed, current.parsed)) {
+        warnings.push(`${next.label} 与 ${current.label}`)
+      }
+    }
+  }
+
+  return [...new Set(warnings)]
+}
+
+function parseCronFields(expr) {
+  const parts = normalizeCron(expr).split(' ')
+  if (parts.length !== 5) return null
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts
+  const fields = {
+    minute: expandCronField(minute, 0, 59),
+    hour: expandCronField(hour, 0, 23),
+    dayOfMonth: expandCronField(dayOfMonth, 1, 31),
+    month: expandCronField(month, 1, 12),
+    dayOfWeek: expandCronField(dayOfWeek, 0, 7, value => value === 7 ? 0 : value),
+  }
+  if (Object.values(fields).some(field => !field)) return null
+  return fields
+}
+
+function expandCronField(field, min, max, normalize = value => value) {
+  const result = new Set()
+  const source = String(field || '').trim()
+  if (!source) return null
+
+  for (const rawPart of source.split(',')) {
+    const [rangeExpr, stepExpr] = rawPart.split('/')
+    const step = stepExpr === undefined ? 1 : Number(stepExpr)
+    if (!Number.isInteger(step) || step < 1) return null
+
+    let start
+    let end
+    if (rangeExpr === '*') {
+      start = min
+      end = max
+    } else if (/^\d+-\d+$/.test(rangeExpr)) {
+      const [rawStart, rawEnd] = rangeExpr.split('-').map(Number)
+      start = rawStart
+      end = rawEnd
+    } else if (/^\d+$/.test(rangeExpr)) {
+      start = Number(rangeExpr)
+      end = Number(rangeExpr)
+    } else {
+      return null
+    }
+
+    if (start < min || start > max || end < min || end > max || start > end) return null
+    for (let value = start; value <= end; value += step) {
+      result.add(normalize(value))
+    }
+  }
+
+  return {
+    any: source === '*',
+    values: result,
+  }
+}
+
+function cronsOverlap(a, b) {
+  if (!a || !b) return false
+  return fieldsOverlap(a.minute, b.minute) &&
+    fieldsOverlap(a.hour, b.hour) &&
+    fieldsOverlap(a.month, b.month) &&
+    dayFieldsOverlap(a, b)
+}
+
+function fieldsOverlap(a, b) {
+  if (!a || !b) return false
+  if (a.any || b.any) return true
+  for (const value of a.values) {
+    if (b.values.has(value)) return true
+  }
+  return false
+}
+
+function dayFieldsOverlap(a, b) {
+  const domPossible = a.dayOfMonth.any || b.dayOfMonth.any || fieldsOverlap(a.dayOfMonth, b.dayOfMonth)
+  const dowPossible = a.dayOfWeek.any || b.dayOfWeek.any || fieldsOverlap(a.dayOfWeek, b.dayOfWeek)
+  return domPossible && dowPossible
 }
 
 function uniqueTimes(times) {
@@ -397,15 +541,12 @@ async function handleSave() {
 
   saving.value = true
   try {
-    for (const cronExpr of generatedCrons.value) {
-      const isFirst = cronExpr === generatedCrons.value[0]
-      await SaveSchedule({
-        id: isEditing.value && isFirst ? scheduleId.value : 0,
-        scriptId: selectedScriptId.value,
-        cronExpr,
-        enabled: enabled.value ? 1 : 0,
-      })
-    }
+    await SaveSchedules(generatedCrons.value.map((cronExpr, index) => ({
+      id: isEditing.value && index === 0 ? scheduleId.value : 0,
+      scriptId: selectedScriptId.value,
+      cronExpr,
+      enabled: enabled.value ? 1 : 0,
+    })))
     if (isEditing.value && generatedCrons.value.length > 1) {
       toast.value = `已更新 1 条并新增 ${generatedCrons.value.length - 1} 条定时规则`
     } else if (isEditing.value) {
@@ -526,6 +667,14 @@ input[type="time"],
   border-radius: var(--radius);
   color: var(--text);
   font-size: var(--type-section-title);
+}
+
+.cron-textarea {
+  min-height: 160px;
+  height: auto;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
 }
 
 select:focus,

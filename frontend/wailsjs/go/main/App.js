@@ -138,6 +138,10 @@ export function SaveSchedule(arg1) {
   return window['go']['main']['App']['SaveSchedule'](arg1);
 }
 
+export function SaveSchedules(arg1) {
+  return window['go']['main']['App']['SaveSchedules'](arg1);
+}
+
 export function SaveWorkflow(arg1) {
   return window['go']['main']['App']['SaveWorkflow'](arg1);
 }
