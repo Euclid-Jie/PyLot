@@ -200,12 +200,43 @@ func (a *App) GetScriptsByCategory(category string) []db.Script {
 }
 
 func (a *App) CreateScript(s db.Script) (int, error) {
+	if err := validateScriptConfig(s); err != nil {
+		return 0, err
+	}
 	id, err := script.Create(s)
 	return int(id), err
 }
 
 func (a *App) UpdateScript(s db.Script) error {
+	if err := validateScriptConfig(s); err != nil {
+		return err
+	}
 	return script.Update(s)
+}
+
+func validateScriptConfig(s db.Script) error {
+	if strings.TrimSpace(s.Name) == "" {
+		return fmt.Errorf("script name is required")
+	}
+	if strings.TrimSpace(s.LaunchMode) == "" {
+		s.LaunchMode = "script"
+	}
+	if s.LaunchMode == "custom" {
+		if strings.TrimSpace(s.WorkDir) == "" {
+			return fmt.Errorf("work directory is required for custom mode")
+		}
+		if strings.TrimSpace(s.ScriptPath) == "" {
+			return fmt.Errorf("command is required for custom mode")
+		}
+		return nil
+	}
+	if strings.TrimSpace(s.InterpreterPath) == "" {
+		return fmt.Errorf("interpreter is required")
+	}
+	if strings.TrimSpace(s.ScriptPath) == "" {
+		return fmt.Errorf("script path is required")
+	}
+	return nil
 }
 
 func (a *App) DeleteScript(id int) error {

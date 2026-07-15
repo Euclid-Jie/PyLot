@@ -106,6 +106,6 @@ func createTables() error {
 }
 
 func CleanOldLogs() error {
-	_, err := DB.Exec(`DELETE FROM run_records WHERE created_at < datetime('now', '-7 days')`)
+	_, err := ExecWrite(`DELETE FROM run_records WHERE created_at < datetime('now', '-7 days')`)
 	return err
 }

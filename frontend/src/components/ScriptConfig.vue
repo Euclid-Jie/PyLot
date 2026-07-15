@@ -34,20 +34,25 @@
         <div class="mode-toggle">
           <button :class="['mode-btn', { active: form.launchMode === 'script' }]" @click="form.launchMode = 'script'">script</button>
           <button :class="['mode-btn', { active: form.launchMode === 'module' }]" @click="form.launchMode = 'module'">module</button>
+          <button :class="['mode-btn', { active: form.launchMode === 'custom' }]" @click="form.launchMode = 'custom'">custom</button>
         </div>
         <span style="flex:1"></span>
         <label class="label-inline">超时(s)</label>
         <input type="number" v-model.number="form.timeoutSeconds" class="ui-input" min="0" placeholder="0=∞" style="width:80px;flex:none" />
       </div>
 
-      <div class="form-row">
+      <div v-if="form.launchMode !== 'custom'" class="form-row">
         <label>解释器</label>
         <input v-model="form.interpreterPath" class="ui-input ui-mono" /><button class="ui-btn" @click="browse('interpreter')"><UiIcon name="folder" />选择</button>
       </div>
-      <div class="form-row">
+      <div v-if="form.launchMode !== 'custom'" class="form-row">
         <label>脚本路径</label>
         <input v-model="form.scriptPath" class="ui-input ui-mono" />
         <button class="ui-btn" @click="browse('script')"><UiIcon name="folder" />选择</button>
+      </div>
+      <div v-else class="form-row">
+        <label>命令</label>
+        <input v-model="form.scriptPath" class="ui-input ui-mono" placeholder='.venv\Scripts\python.exe -m fof99_nav_ingestion run --include-stale --update-token' />
       </div>
       <div class="form-row">
         <label>工作目录</label>
@@ -56,7 +61,7 @@
         <button class="ui-icon-btn workdir-icon-btn" :disabled="!form.workDir" title="在 VS Code 中打开工作目录" aria-label="在 VS Code 中打开工作目录" @click="openWorkDir"><UiIcon name="terminal" /></button>
       </div>
 
-      <div class="form-section">
+      <div v-if="form.launchMode !== 'custom'" class="form-section">
         <div class="section-header">
           <span>固定参数</span>
           <button class="ui-btn small" @click="argPairs.push({ flag: '', val: '' })"><UiIcon name="add" />添加参数</button>
@@ -180,9 +185,15 @@ async function handleSave() {
   if (saving.value) return
   actionError.value = ''
   if (!form.value.name.trim()) { actionError.value = '请输入脚本名称'; return }
-  if (!form.value.scriptPath.trim()) { actionError.value = '请选择脚本文件'; return }
+  if (form.value.launchMode === 'custom') {
+    if (!form.value.workDir.trim()) { actionError.value = '请选择工作目录'; return }
+    if (!form.value.scriptPath.trim()) { actionError.value = '请输入自定义命令'; return }
+  } else if (!form.value.scriptPath.trim()) {
+    actionError.value = '请选择脚本文件'
+    return
+  }
   saving.value = true
-  const data = { ...form.value, fixedArgs: buildFixedArgs(), privateEnv: buildPrivateEnv() }
+  const data = { ...form.value, fixedArgs: form.value.launchMode === 'custom' ? '' : buildFixedArgs(), privateEnv: buildPrivateEnv() }
   try {
     if (isNew.value) {
       const id = await CreateScript(data)
@@ -209,7 +220,7 @@ function showToast(msg) {
 
 function handleRun() {
   if (isNew.value || store.isDirty || actionPending.value) return
-  if (argPairs.value.some(a => a.flag)) showTempArgs.value = true
+  if (form.value.launchMode !== 'custom' && argPairs.value.some(a => a.flag)) showTempArgs.value = true
   else doRun('')
 }
 
@@ -262,7 +273,7 @@ async function handleCopy() {
   if (actionPending.value) return
   actionPending.value = 'copy'
   actionError.value = ''
-  const data = { ...form.value, id: null, name: form.value.name + ' (副本)', fixedArgs: buildFixedArgs(), privateEnv: buildPrivateEnv() }
+  const data = { ...form.value, id: null, name: form.value.name + ' (副本)', fixedArgs: form.value.launchMode === 'custom' ? '' : buildFixedArgs(), privateEnv: buildPrivateEnv() }
   try {
     const id = await CreateScript(data)
     store.clearDirty()

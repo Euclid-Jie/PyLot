@@ -5,13 +5,12 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	"golang.org/x/sys/windows"
+	"script-manager/internal/commandline"
 )
 
 const (
@@ -120,14 +119,14 @@ func Start(id int64, command, workDir string, cbs Callbacks) error {
 	mu.Unlock()
 	emitStatus(cbs, snap)
 
-	exe, args, err := parseCommand(command)
+	exe, args, err := commandline.Parse(command)
 	if err != nil {
 		snap = failStart(id, err)
 		emitStatus(cbs, snap)
 		return err
 	}
 
-	exe = resolveExecutable(exe, workDir)
+	exe = commandline.ResolveExecutable(exe, workDir)
 	cmd := exec.Command(exe, args...)
 	if workDir != "" {
 		cmd.Dir = workDir
@@ -241,28 +240,6 @@ func StopAll() {
 	for _, id := range ids {
 		_, _ = Stop(id)
 	}
-}
-
-func parseCommand(command string) (string, []string, error) {
-	parts, err := windows.DecomposeCommandLine(strings.TrimSpace(command))
-	if err != nil {
-		return "", nil, err
-	}
-	if len(parts) == 0 || strings.TrimSpace(parts[0]) == "" {
-		return "", nil, fmt.Errorf("empty command")
-	}
-	return parts[0], parts[1:], nil
-}
-
-func resolveExecutable(exe, workDir string) string {
-	if exe == "" || filepath.IsAbs(exe) || workDir == "" {
-		return exe
-	}
-	candidate := filepath.Join(workDir, exe)
-	if _, err := os.Stat(candidate); err == nil {
-		return candidate
-	}
-	return exe
 }
 
 func waitForExit(id int64, cmd *exec.Cmd, stdoutWriter, stderrWriter *lineWriter, cbs Callbacks) {

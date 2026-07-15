@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"script-manager/internal/commandline"
 	"script-manager/internal/db"
 )
 
@@ -99,8 +100,23 @@ func (w *lineWriter) Flush() {
 
 func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 	args := []string{}
+	exe := task.InterpreterPath
 	scriptArg := task.ScriptPath
-	if task.LaunchMode == "module" {
+	if task.LaunchMode == "custom" {
+		var err error
+		exe, args, err = commandline.Parse(task.ScriptPath)
+		if err != nil {
+			return err
+		}
+		exe = commandline.ResolveExecutable(exe, task.WorkDir)
+		if task.Args != "" {
+			extraArgs, err := commandline.ParseArgs(task.Args)
+			if err != nil {
+				return err
+			}
+			args = append(args, extraArgs...)
+		}
+	} else if task.LaunchMode == "module" {
 		args = append(args, "-m")
 		// Convert absolute script path to module name relative to WorkDir
 		scriptArg = strings.TrimSuffix(scriptArg, ".py")
@@ -115,13 +131,26 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 		}
 		// Convert path separators to dots for module name
 		scriptArg = strings.ReplaceAll(scriptArg, "/", ".")
-	}
-	args = append(args, scriptArg)
-	if task.Args != "" {
-		args = append(args, strings.Fields(task.Args)...)
+		args = append(args, scriptArg)
+		if task.Args != "" {
+			extraArgs, err := commandline.ParseArgs(task.Args)
+			if err != nil {
+				return err
+			}
+			args = append(args, extraArgs...)
+		}
+	} else {
+		args = append(args, scriptArg)
+		if task.Args != "" {
+			extraArgs, err := commandline.ParseArgs(task.Args)
+			if err != nil {
+				return err
+			}
+			args = append(args, extraArgs...)
+		}
 	}
 
-	cmd := exec.Command(task.InterpreterPath, args...)
+	cmd := exec.Command(exe, args...)
 	cmd.Dir = task.WorkDir
 	cmd.Env = append(task.Env, "PYTHONIOENCODING=utf-8")
 	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true}
@@ -136,7 +165,7 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 			lastOutput = time.Now()
 			logMu.Unlock()
 			cbs.OnLog(line, isErr)
-			db.DB.Exec(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`, line+"\n", recordID)
+			db.ExecWrite(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`, line+"\n", recordID)
 		}}
 		if isErr {
 			stderrWriter = lw
@@ -164,7 +193,7 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 		OnRunningChange(count)
 	}
 
-	db.DB.Exec(`INSERT OR REPLACE INTO running_tasks(script_id,pid,started_at) VALUES(?,?,?)`,
+	db.ExecWrite(`INSERT OR REPLACE INTO running_tasks(script_id,pid,started_at) VALUES(?,?,?)`,
 		task.ScriptID, cmd.Process.Pid, time.Now())
 
 	// Periodic flush to reduce log delay
@@ -217,7 +246,7 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 			OnRunningChange(count)
 		}
 
-		db.DB.Exec(`DELETE FROM running_tasks WHERE script_id=?`, task.ScriptID)
+		db.ExecWrite(`DELETE FROM running_tasks WHERE script_id=?`, task.ScriptID)
 
 		status := "success"
 		isError := 0
@@ -226,7 +255,7 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 			isError = 1
 		}
 		now := time.Now()
-		res, updateErr := db.DB.Exec(`UPDATE run_records SET ended_at=?,status=?,is_error=? WHERE id=? AND status='running'`,
+		res, updateErr := db.ExecWrite(`UPDATE run_records SET ended_at=?,status=?,is_error=? WHERE id=? AND status='running'`,
 			now, status, isError, recordID)
 		if updateErr == nil {
 			affected, _ := res.RowsAffected()
@@ -278,30 +307,30 @@ func GetPID(scriptID int) int {
 
 func MarkKilled(recordID int) {
 	now := time.Now()
-	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE id=? AND status='running'`, now, recordID)
+	db.ExecWrite(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE id=? AND status='running'`, now, recordID)
 }
 
 func MarkTimeout(recordID int) {
 	now := time.Now()
-	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='timeout',is_error=1 WHERE id=? AND status='running'`, now, recordID)
+	db.ExecWrite(`UPDATE run_records SET ended_at=?,status='timeout',is_error=1 WHERE id=? AND status='running'`, now, recordID)
 }
 
 func MarkError(recordID int) {
 	now := time.Now()
-	db.DB.Exec(`UPDATE run_records SET ended_at=?,status='error',is_error=1 WHERE id=? AND status='running'`, now, recordID)
+	db.ExecWrite(`UPDATE run_records SET ended_at=?,status='error',is_error=1 WHERE id=? AND status='running'`, now, recordID)
 }
 
 func CleanupStaleRuns() error {
 	now := time.Now()
-	if _, err := db.DB.Exec(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE status='running' AND ended_at IS NULL`, now); err != nil {
+	if _, err := db.ExecWrite(`UPDATE run_records SET ended_at=?,status='killed',is_error=1 WHERE status='running' AND ended_at IS NULL`, now); err != nil {
 		return err
 	}
-	_, err := db.DB.Exec(`DELETE FROM running_tasks`)
+	_, err := db.ExecWrite(`DELETE FROM running_tasks`)
 	return err
 }
 
 func CreateRecord(scriptID int, envSnapshot string) (int64, error) {
-	res, err := db.DB.Exec(
+	res, err := db.ExecWrite(
 		`INSERT INTO run_records(script_id,started_at,status,log_output,is_error,env_snapshot,created_at) VALUES(?,?,?,?,?,?,?)`,
 		scriptID, time.Now(), "running", "", 0, envSnapshot, time.Now(),
 	)

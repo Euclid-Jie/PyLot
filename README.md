@@ -4,13 +4,14 @@ Python 脚本调度桌面管理系统，适合需要定期运行多个 Python �
 
 ## 功能
 
-- 按分类管理 Python 脚本，支持 script 和 module 两种启动模式，自动识别虚拟环境解释器
+- 按分类管理 Python 脚本，支持 script、module 和 custom 三种启动模式，自动识别虚拟环境解释器
 - 脚本和服务工作目录可直接在 VS Code 中打开
 - 实时日志输出（UTF-8，支持中文）
 - cron 定时调度，脚本和工作流均可设置；支持在定时任务总览直接新增/编辑、按最近运行时间筛选排序、查看最近运行情况和脚本历史日志
 - 全局 .env + 脚本私有环境变量双层合并
 - 卡死超时检测与强杀
 - **Workflow**：拖拽编排多脚本依赖关系，支持并发执行和错误终止
+- **自定义命令**：脚本可选择 custom 模式，仅配置工作目录和完整命令，适合 `python -m package subcommand --flag` 这类入口
 - **服务管理**：管理长期运行的本地命令/服务，支持启动、停止、可靠重启、访问链接、端口占用检测、实时日志和状态追踪
 - **服务跟随 PyLot 启动**：服务可单独开启“跟随 PyLot 启动”，软件启动后自动拉起对应服务
 - **飞书通知**：脚本或工作流执行结束后通过 lark-cli 发送飞书消息
@@ -31,6 +32,7 @@ Go + [Wails v2](https://wails.io) + Vue3 + SQLite（纯 Go 驱动，无需 GCC�
 - 未保存的脚本、工作流、服务或设置在离开页面前会提示确认
 - 工作流支持真实停止、结构校验、运行态恢复和按节点聚合日志
 - 删除脚本/工作流会校验引用并清理关联定时任务，scheduler 注册失败会回滚
+- SQLite 写入路径对脚本日志和运行状态做串行化与短重试，降低多脚本并发运行时的 `database is locked` 风险
 
 详细页面职责和交互约定见 [UI 与交互规范](./docs/ui-interaction-spec.md)。
 
@@ -89,3 +91,14 @@ wails build -platform windows/amd64 -ldflags "-H windowsgui"
 ## 运行态恢复
 
 PyLot 启动和退出时会自动收敛脚本运行态：将异常中断遗留的 `running` 运行记录标记为 `killed`，并清空 `running_tasks`，避免历史日志长期显示为“运行中”。
+
+## 自定义命令模式
+
+`custom` 启动模式用于无法用单个 `.py` 文件或 module 路径表达的入口。该模式只需要填写工作目录和命令，命令按 Windows 命令行规则解析，支持带空格路径和引号参数；相对可执行文件会优先按工作目录解析。
+
+示例：
+
+```powershell
+工作目录：W:\WorkSpace\nav_data_tracking
+命令：.\.venv\Scripts\python.exe -m fof99_nav_ingestion run --include-stale --update-token
+```
