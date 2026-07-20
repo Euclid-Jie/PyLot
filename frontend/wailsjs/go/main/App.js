@@ -18,12 +18,20 @@ export function CreateScript(arg1) {
   return window['go']['main']['App']['CreateScript'](arg1);
 }
 
+export function CreateScriptList(arg1) {
+  return window['go']['main']['App']['CreateScriptList'](arg1);
+}
+
 export function DeleteSchedule(arg1) {
   return window['go']['main']['App']['DeleteSchedule'](arg1);
 }
 
 export function DeleteScript(arg1) {
   return window['go']['main']['App']['DeleteScript'](arg1);
+}
+
+export function DeleteScriptList(arg1) {
+  return window['go']['main']['App']['DeleteScriptList'](arg1);
 }
 
 export function DeleteService(arg1) {
@@ -70,6 +78,10 @@ export function GetScript(arg1) {
   return window['go']['main']['App']['GetScript'](arg1);
 }
 
+export function GetScriptLists() {
+  return window['go']['main']['App']['GetScriptLists']();
+}
+
 export function GetScripts() {
   return window['go']['main']['App']['GetScripts']();
 }
@@ -106,6 +118,10 @@ export function ListServices() {
   return window['go']['main']['App']['ListServices']();
 }
 
+export function MoveScriptList(arg1, arg2) {
+  return window['go']['main']['App']['MoveScriptList'](arg1, arg2);
+}
+
 export function OpenDirectoryDialog(arg1) {
   return window['go']['main']['App']['OpenDirectoryDialog'](arg1);
 }
@@ -116,6 +132,10 @@ export function OpenFileDialog(arg1) {
 
 export function OpenInVSCode(arg1) {
   return window['go']['main']['App']['OpenInVSCode'](arg1);
+}
+
+export function RenameScriptList(arg1, arg2) {
+  return window['go']['main']['App']['RenameScriptList'](arg1, arg2);
 }
 
 export function RestartService(arg1) {

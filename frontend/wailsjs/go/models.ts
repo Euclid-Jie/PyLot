@@ -131,6 +131,7 @@ export namespace db {
 	    id: number;
 	    name: string;
 	    category: string;
+	    listId: number;
 	    interpreterPath: string;
 	    workDir: string;
 	    scriptPath: string;
@@ -152,6 +153,7 @@ export namespace db {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.category = source["category"];
+	        this.listId = source["listId"];
 	        this.interpreterPath = source["interpreterPath"];
 	        this.workDir = source["workDir"];
 	        this.scriptPath = source["scriptPath"];
@@ -180,6 +182,24 @@ export namespace db {
 		    }
 		    return a;
 		}
+	}
+	export class ScriptList {
+	    id: number;
+	    name: string;
+	    sortOrder: number;
+	    scriptCount: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ScriptList(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.sortOrder = source["sortOrder"];
+	        this.scriptCount = source["scriptCount"];
+	    }
 	}
 	export class Workflow {
 	    id: number;
@@ -420,4 +440,3 @@ export namespace scheduler {
 	}
 
 }
-

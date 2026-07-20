@@ -1,9 +1,12 @@
 <template>
   <div class="script-config" @keydown.ctrl.s.prevent="handleSave">
     <div class="config-header ui-page-header">
-      <div>
-        <h2>{{ isNew ? '新建脚本' : form.name || '脚本配置' }}</h2>
-        <p class="ui-page-subtitle">配置运行环境、参数和私有环境变量</p>
+      <div class="config-title">
+        <button class="mobile-back ui-icon-btn" title="返回脚本列表" aria-label="返回脚本列表" @click="store.closeScriptDetail()"><UiIcon name="chevronLeft" /></button>
+        <div>
+          <h2>{{ isNew ? '新建脚本' : form.name || '脚本配置' }}</h2>
+          <p class="ui-page-subtitle">配置运行环境、参数和私有环境变量</p>
+        </div>
       </div>
       <div class="header-actions">
         <span v-if="isRunning" class="ui-status running">运行中</span>
@@ -21,11 +24,10 @@
       <div class="form-row">
         <label>名称</label>
         <input v-model="form.name" class="ui-input" style="flex:2" />
-        <label class="label-inline">分类</label>
-        <select v-model="form.category" class="ui-input" style="flex:1">
-          <option value="crawler">爬取上传</option>
-          <option value="processor">数据处理</option>
-          <option value="tool">个人工具</option>
+        <label class="label-inline">列表</label>
+        <select v-model.number="form.listId" class="ui-input" style="flex:1">
+          <option :value="0">未分类</option>
+          <option v-for="list in scriptLists" :key="list.id" :value="list.id">{{ list.name }}</option>
         </select>
       </div>
 
@@ -98,7 +100,7 @@
 
 <script setup>
 import { ref, computed, nextTick, onMounted, watch } from 'vue'
-import { GetScript, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, OpenInVSCode, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
+import { GetScript, GetScriptLists, CreateScript, UpdateScript, DeleteScript, RunScript, StopScript, OpenFileDialog, OpenDirectoryDialog, OpenInVSCode, InferFromScriptPath } from '../../wailsjs/go/main/App.js'
 import { useMainStore } from '../stores/main.js'
 import TempArgsModal from './TempArgsModal.vue'
 import TimerModal from './TimerModal.vue'
@@ -112,10 +114,11 @@ const showDeleteConfirm = ref(false)
 const saving = ref(false)
 const actionPending = ref('')
 const actionError = ref('')
+const scriptLists = ref([])
 let hydrating = true
 
 const form = ref({
-  id: null, name: '', category: 'crawler', interpreterPath: 'python',
+  id: null, name: '', category: '', listId: 0, interpreterPath: 'python',
   workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '',
   timeoutSeconds: 0, privateEnv: '{}'
 })
@@ -125,8 +128,12 @@ const argPairs = ref([])  // { flag: string, val: string }
 const isNew = computed(() => store.selectedScriptID === 0)
 const isRunning = computed(() => store.runningScripts.has(store.selectedScriptID))
 
-onMounted(loadScript)
+onMounted(async () => {
+  scriptLists.value = await GetScriptLists() || []
+  await loadScript()
+})
 watch(() => store.selectedScriptID, loadScript)
+watch(() => store.scriptListVersion, async () => { scriptLists.value = await GetScriptLists() || [] })
 watch(() => form.value.workDir, v => { store.selectedScriptWorkDir = v || '' })
 watch([form, envPairs, argPairs], () => {
   if (!hydrating) store.markDirty()
@@ -137,7 +144,8 @@ async function loadScript() {
   actionError.value = ''
   store.clearDirty()
   if (isNew.value) {
-    form.value = { id: null, name: '', category: 'crawler', interpreterPath: 'python', workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '', timeoutSeconds: 0, privateEnv: '{}' }
+    const selectedListId = typeof store.selectedScriptListId === 'number' ? store.selectedScriptListId : 0
+    form.value = { id: null, name: '', category: '', listId: selectedListId, interpreterPath: 'python', workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '', timeoutSeconds: 0, privateEnv: '{}' }
     envPairs.value = []
     argPairs.value = []
     await finishHydration()
@@ -198,10 +206,12 @@ async function handleSave() {
     if (isNew.value) {
       const id = await CreateScript(data)
       store.clearDirty()
+      if (store.selectedScriptListId !== 'all') store.showScriptInList(data.listId)
       store.setScript(id)
     } else {
       await UpdateScript(data)
       store.clearDirty()
+      if (store.selectedScriptListId !== 'all') store.showScriptInList(data.listId)
     }
     store.refreshScriptList()
     showToast('保存成功')
@@ -321,6 +331,8 @@ function normalizeError(error) {
 <style scoped>
 .script-config { padding: 0; }
 .config-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border); }
+.config-title { min-width: 0; display: flex; align-items: center; gap: 8px; }
+.mobile-back { display: none; }
 .config-header h2 { color: var(--text); font-size: var(--type-page-title); font-weight: var(--weight-semibold); }
 .header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .badge-running { background: var(--green-dim); color: var(--green); padding: 5px 12px; border-radius: 20px; font-size: var(--type-body); font-weight: var(--weight-medium); border: 1px solid rgba(63,185,80,.3); }
@@ -389,6 +401,9 @@ fieldset:disabled { opacity: .62; }
   .header-actions { flex-wrap: wrap; justify-content: flex-end; }
   .form-row { flex-wrap: wrap; }
   .form-row > label:first-child { width: 100%; }
+}
+@media (max-width: 1050px) {
+  .mobile-back { display: inline-flex; }
 }
 
 </style>

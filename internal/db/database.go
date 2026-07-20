@@ -35,10 +35,15 @@ func createTables() error {
 		env_file_path TEXT,
 		updated_at DATETIME
 	);
+	CREATE TABLE IF NOT EXISTS schema_migrations (
+		name TEXT PRIMARY KEY,
+		applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
+	);
 	CREATE TABLE IF NOT EXISTS scripts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
 		category TEXT NOT NULL,
+		list_id INTEGER,
 		interpreter_path TEXT,
 		work_dir TEXT,
 		script_path TEXT,
@@ -48,6 +53,14 @@ func createTables() error {
 		timeout_seconds INTEGER DEFAULT 0,
 		created_at DATETIME,
 		updated_at DATETIME
+	);
+	CREATE TABLE IF NOT EXISTS script_lists (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		legacy_key TEXT UNIQUE,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE TABLE IF NOT EXISTS schedules (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -102,7 +115,53 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE global_config ADD COLUMN lark_open_id TEXT DEFAULT ''`)
 	DB.Exec(`ALTER TABLE services ADD COLUMN port INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE services ADD COLUMN protocol TEXT NOT NULL DEFAULT 'http'`)
+	DB.Exec(`ALTER TABLE scripts ADD COLUMN list_id INTEGER`)
+	if err := migrateScriptLists(); err != nil {
+		return err
+	}
 	return err
+}
+
+func migrateScriptLists() error {
+	var applied int
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM schema_migrations WHERE name='script_lists_v1'`).Scan(&applied); err != nil {
+		return err
+	}
+	if applied > 0 {
+		return nil
+	}
+
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err = tx.Exec(`
+		INSERT OR IGNORE INTO script_lists(name, sort_order, legacy_key) VALUES
+			('数据爬取上传', 10, 'crawler'),
+			('数据处理', 20, 'processor'),
+			('个人工具', 30, 'tool');
+
+		INSERT OR IGNORE INTO script_lists(name, sort_order, legacy_key)
+		SELECT category, 100 + ROW_NUMBER() OVER (ORDER BY category), category
+		FROM scripts
+		WHERE TRIM(category) <> ''
+		GROUP BY category;
+
+		UPDATE scripts
+		SET list_id = (
+			SELECT id FROM script_lists WHERE legacy_key = scripts.category
+		)
+		WHERE list_id IS NULL AND TRIM(category) <> '';
+
+		UPDATE scripts SET category='' WHERE list_id IS NOT NULL;
+	`); err != nil {
+		return err
+	}
+	if _, err = tx.Exec(`INSERT INTO schema_migrations(name) VALUES('script_lists_v1')`); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 func CleanOldLogs() error {

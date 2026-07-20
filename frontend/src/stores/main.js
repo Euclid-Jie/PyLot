@@ -4,6 +4,8 @@ import { GetLatestLog } from '../../wailsjs/go/main/App.js'
 
 export const useMainStore = defineStore('main', () => {
   const selectedScriptID = ref(null)
+  const savedScriptList = localStorage.getItem('selectedScriptList') || 'all'
+  const selectedScriptListId = ref(['all', 'unassigned'].includes(savedScriptList) ? savedScriptList : Number(savedScriptList))
   const currentView = ref('script')
   const runningScripts = reactive(new Set())
   const currentLogs = ref([])
@@ -49,11 +51,38 @@ export const useMainStore = defineStore('main', () => {
     })
   }
 
+  function setScriptList(id) {
+    if (currentView.value === 'script' && selectedScriptListId.value === id && selectedScriptID.value === null) return true
+    return navigate(() => {
+      selectedScriptListId.value = id
+      selectedScriptID.value = null
+      currentView.value = 'script'
+      currentLogs.value = []
+      selectedScriptWorkDir.value = ''
+      localStorage.setItem('selectedScriptList', String(id))
+    })
+  }
+
+  function showScriptInList(id) {
+    selectedScriptListId.value = id > 0 ? id : 'unassigned'
+    localStorage.setItem('selectedScriptList', String(selectedScriptListId.value))
+  }
+
+  function closeScriptDetail() {
+    return navigate(() => {
+      selectedScriptID.value = null
+      currentLogs.value = []
+      selectedScriptWorkDir.value = ''
+    })
+  }
+
   function setScriptFromWorkflow(id) {
     if (currentView.value === 'script' && selectedScriptID.value === id) return true
     return navigate(async () => {
       selectedScriptID.value = id
       currentView.value = 'script'
+      selectedScriptListId.value = 'all'
+      localStorage.setItem('selectedScriptList', 'all')
       selectedWorkflowId.value = null
       selectedScriptWorkDir.value = ''
       const rec = await GetLatestLog(id)
@@ -85,5 +114,5 @@ export const useMainStore = defineStore('main', () => {
   }
   function refreshScriptList() { scriptListVersion.value++ }
 
-  return { selectedScriptID, currentView, runningScripts, currentLogs, scriptListVersion, selectedScriptWorkDir, selectedWorkflowId, newWorkflowTick, isDirty, navigationBlocked, setScript, setScriptFromWorkflow, setView, openWorkflow, newWorkflow, addLog, clearLogs, setRunning, refreshScriptList, markDirty, clearDirty, confirmNavigation, cancelNavigation, requestNavigation: navigate }
+  return { selectedScriptID, selectedScriptListId, currentView, runningScripts, currentLogs, scriptListVersion, selectedScriptWorkDir, selectedWorkflowId, newWorkflowTick, isDirty, navigationBlocked, setScript, setScriptList, showScriptInList, closeScriptDetail, setScriptFromWorkflow, setView, openWorkflow, newWorkflow, addLog, clearLogs, setRunning, refreshScriptList, markDirty, clearDirty, confirmNavigation, cancelNavigation, requestNavigation: navigate }
 })

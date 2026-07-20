@@ -18,6 +18,7 @@ import (
 	"script-manager/internal/notify"
 	"script-manager/internal/scheduler"
 	"script-manager/internal/script"
+	"script-manager/internal/scriptlist"
 	svc "script-manager/internal/service"
 	"script-manager/internal/workflow"
 
@@ -190,6 +191,28 @@ func (a *App) GetScripts() []db.Script {
 	return scripts
 }
 
+func (a *App) GetScriptLists() []db.ScriptList {
+	lists, _ := scriptlist.GetAll()
+	return lists
+}
+
+func (a *App) CreateScriptList(name string) (int, error) {
+	id, err := scriptlist.Create(name)
+	return int(id), err
+}
+
+func (a *App) RenameScriptList(id int, name string) error {
+	return scriptlist.Rename(id, name)
+}
+
+func (a *App) MoveScriptList(id, direction int) error {
+	return scriptlist.Move(id, direction)
+}
+
+func (a *App) DeleteScriptList(id int) error {
+	return scriptlist.Delete(id)
+}
+
 func (a *App) GetScript(id int) (*db.Script, error) {
 	return script.GetByID(id)
 }
@@ -217,6 +240,15 @@ func (a *App) UpdateScript(s db.Script) error {
 func validateScriptConfig(s db.Script) error {
 	if strings.TrimSpace(s.Name) == "" {
 		return fmt.Errorf("script name is required")
+	}
+	if s.ListID > 0 {
+		var exists int
+		if err := db.DB.QueryRow(`SELECT COUNT(*) FROM script_lists WHERE id=?`, s.ListID).Scan(&exists); err != nil {
+			return err
+		}
+		if exists == 0 {
+			return fmt.Errorf("script list not found")
+		}
 	}
 	if strings.TrimSpace(s.LaunchMode) == "" {
 		s.LaunchMode = "script"

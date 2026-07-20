@@ -25,7 +25,9 @@ const props = defineProps({
 const icons = {
   add: ['M12 5v14', 'M5 12h14'],
   chevronDown: ['m6 9 6 6 6-6'],
+  chevronUp: ['m18 15-6-6-6 6'],
   chevronRight: ['m9 18 6-6-6-6'],
+  chevronLeft: ['m15 18-6-6 6-6'],
   clock: ['M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z', 'M12 6v6l4 2'],
   copy: ['M8 8h11v11H8z', 'M5 16H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h11a1 1 0 0 1 1 1v1'],
   delete: ['M3 6h18', 'M8 6V4h8v2', 'm19 6-1 15H6L5 6', 'M10 11v5', 'M14 11v5'],
@@ -36,6 +38,7 @@ const icons = {
   history: ['M3 12a9 9 0 1 0 3-6.7L3 8', 'M3 3v5h5', 'M12 7v5l3 2'],
   layout: ['M4 4h6v16H4z', 'M14 4h6v7h-6z', 'M14 15h6v5h-6z'],
   more: ['M5 12h.01', 'M12 12h.01', 'M19 12h.01'],
+  edit: ['M12 20h9', 'M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z'],
   pause: ['M8 5v14', 'M16 5v14'],
   play: ['m8 5 11 7-11 7Z'],
   refresh: ['M20 11a8.1 8.1 0 0 0-15.5-2M4 4v5h5', 'M4 13a8.1 8.1 0 0 0 15.5 2M20 20v-5h-5'],

@@ -1,7 +1,9 @@
 <template>
   <div class="app-layout">
     <aside class="sidebar"><Sidebar /></aside>
-    <main class="main-area">
+    <main class="main-area" :class="{ 'script-mode': store.currentView === 'script', 'detail-open': store.selectedScriptID !== null }">
+      <ScriptListPane v-if="store.currentView === 'script'" />
+      <section class="workspace-main">
       <div class="content-area" :class="{ 'no-pad': store.currentView === 'workflow' }">
         <ScheduleView v-if="store.currentView === 'schedule'" />
         <SettingsView v-else-if="store.currentView === 'settings'" />
@@ -31,6 +33,7 @@
           <LogPanel @collapse="collapseLog" />
         </footer>
       </template>
+      </section>
     </main>
   </div>
 
@@ -56,6 +59,7 @@ import { resolveFont } from './utils/font.js'
 import LogPanel from './components/LogPanel.vue'
 import ScheduleView from './components/ScheduleView.vue'
 import ScriptConfig from './components/ScriptConfig.vue'
+import ScriptListPane from './components/ScriptListPane.vue'
 import ServicesView from './components/ServicesView.vue'
 import SettingsView from './components/SettingsView.vue'
 import Sidebar from './components/Sidebar.vue'
@@ -122,7 +126,8 @@ onUnmounted(() => {
 <style>
 .app-layout { display: flex; height: 100vh; background: var(--bg); }
 .sidebar { width: 248px; min-width: 248px; overflow: hidden; border-right: 1px solid var(--border); background: var(--sidebar-bg); }
-.main-area { position: relative; min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+.main-area { position: relative; min-width: 0; flex: 1; display: flex; overflow: hidden; }
+.workspace-main { position: relative; min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .content-area { min-height: 0; flex: 1; overflow-y: auto; padding: 24px 28px; }
 .content-area.no-pad { padding: 0; overflow: hidden; }
 .empty-state { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px; text-align: center; }
@@ -140,5 +145,11 @@ onUnmounted(() => {
 .alert-icon { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%; background: var(--red-dim); color: var(--red); font-weight: var(--weight-semibold); }
 .alert-content strong { color: var(--text); font-size: var(--type-section-title); font-weight: var(--weight-semibold); }
 .alert-content p { margin-top: 5px; color: var(--text-dim); font-size: var(--type-body); }
-@media (max-width: 900px) { .sidebar { width: 220px; min-width: 220px; } .content-area { padding: 20px; } }
+@media (max-width: 1050px) {
+  .sidebar { width: 220px; min-width: 220px; }
+  .content-area { padding: 20px; }
+  .main-area.script-mode:not(.detail-open) .workspace-main { display: none; }
+  .main-area.script-mode:not(.detail-open) .script-list-pane { width: 100%; flex-basis: 100%; border-right: 0; }
+  .main-area.script-mode.detail-open .script-list-pane { display: none; }
+}
 </style>

@@ -12,9 +12,13 @@ export function CopyWorkflow(arg1:number):Promise<number>;
 
 export function CreateScript(arg1:db.Script):Promise<number>;
 
+export function CreateScriptList(arg1:string):Promise<number>;
+
 export function DeleteSchedule(arg1:number):Promise<void>;
 
 export function DeleteScript(arg1:number):Promise<void>;
+
+export function DeleteScriptList(arg1:number):Promise<void>;
 
 export function DeleteService(arg1:number):Promise<void>;
 
@@ -38,6 +42,8 @@ export function GetSchedules():Promise<Array<db.Schedule>>;
 
 export function GetScript(arg1:number):Promise<db.Script>;
 
+export function GetScriptLists():Promise<Array<db.ScriptList>>;
+
 export function GetScripts():Promise<Array<db.Script>>;
 
 export function GetScriptsByCategory(arg1:string):Promise<Array<db.Script>>;
@@ -56,11 +62,15 @@ export function InferFromScriptPath(arg1:string):Promise<main.ScriptInferResult>
 
 export function ListServices():Promise<Array<main.ServiceInfo>>;
 
+export function MoveScriptList(arg1:number,arg2:number):Promise<void>;
+
 export function OpenDirectoryDialog(arg1:string):Promise<string>;
 
 export function OpenFileDialog(arg1:string):Promise<string>;
 
 export function OpenInVSCode(arg1:string):Promise<void>;
+
+export function RenameScriptList(arg1:number,arg2:string):Promise<void>;
 
 export function RestartService(arg1:number):Promise<void>;
 

@@ -50,7 +50,8 @@ cd frontend && npm install && cd ..
 
 - `main.go` — Wails 启动 + systray 托盘（`goruntime.LockOSThread()` 保证消息泵稳定）。Wails `SingleInstanceLock` 防多开并在二次启动时显示已有窗口；双托盘图标（`icon_free.ico` / `icon_busy.ico`）随运行状态切换；关闭窗口触发 `OnBeforeClose` 隐藏到托盘；托盘右键菜单：显示主窗口 / 定时任务 / 退出（`os.Exit(0)`）。
 - `app.go` — 所有暴露给前端的方法（Wails bind）。包含文件对话框、VS Code 打开工作目录、脚本推断、窗口大小读写、Workflow CRUD、Service CRUD/控制/日志等。
-- `internal/db/` — SQLite 初始化建表（8张表）+ WAL 模式（防并发写丢失）+ `busy_timeout=5000`；`write.go` 对脚本日志、运行状态等核心写入做进程内串行化和 SQLite busy/locked 短重试；`global_config` 含 `lark_cli_path`/`lark_open_id` 字段；`services` 表保存服务命令、工作目录、跟随 PyLot 启动开关、访问端口和协议；日志清理（7天）。数据库文件在 exe 同目录。
+- `internal/db/` — SQLite 初始化建表（10张表）+ WAL 模式（防并发写丢失）+ `busy_timeout=5000`；`write.go` 对脚本日志、运行状态等核心写入做进程内串行化和 SQLite busy/locked 短重试；`script_lists` 保存用户脚本列表，`scripts.list_id` 为空表示未分类；`schema_migrations` 保证旧 category 到动态列表的迁移只执行一次；`global_config` 含 `lark_cli_path`/`lark_open_id` 字段；`services` 表保存服务命令、工作目录、跟随 PyLot 启动开关、访问端口和协议；日志清理（7天）。数据库文件在 exe 同目录。
+- `internal/scriptlist/` — 脚本列表 CRUD。列表名称唯一；删除列表时只将脚本移入“未分类”，不会删除脚本。
 - `internal/commandline/` — Windows 命令行解析工具，封装 `windows.DecomposeCommandLine`，供脚本 custom 模式、固定参数解析和服务命令复用；相对可执行文件优先按 WorkDir 解析。
 - `internal/script/runner.go` — 进程启动，注入 `PYTHONIOENCODING=utf-8` 统一编码，`SysProcAttr{HideWindow: true}` 隐藏黑框，支持卡死超时检测；module 模式自动将绝对路径转换为相对 WorkDir 的点号模块名；custom 模式直接解析并执行用户填写的完整命令。
 - `internal/service/manager.go` — 长期运行服务进程管理。维护 `starting/running/stopping/exited/failed/stopped` 运行态、PID、启动/停止时间、退出码、最近错误和本次会话最近 1000 行日志；使用 Windows `DecomposeCommandLine` 解析命令，`taskkill /F /T /PID` 停止进程树；`port_windows.go` 通过 Windows TCP 表查询监听 PID、进程名和路径，沿父 PID 链识别其所属服务进程树，并在结束占用进程前复核端口与 PID。
@@ -61,8 +62,9 @@ cd frontend && npm install && cd ..
 
 ### 前端（Vue3 + Pinia）
 
-- `stores/main.js` — 全局状态。`scriptListVersion` 刷新侧边栏；`selectedWorkflowId` 控制 WorkflowEditor 加载哪个工作流；`setScriptFromWorkflow` 跳转脚本配置时自动加载最近一次运行日志；`isDirty`/`navigationBlocked` 统一处理未保存页面的离开确认。
-- `Sidebar.vue` — 主导航 + 可搜索资源树。脚本按分类展示，工作流独立分组；服务/定时任务位于顶部主导航，设置固定在底部，并按当前视图高亮。
+- `stores/main.js` — 全局状态。`selectedScriptListId` 保存当前脚本列表，`scriptListVersion` 刷新列表与脚本栏；`selectedWorkflowId` 控制 WorkflowEditor 加载哪个工作流；`setScriptFromWorkflow` 跳转脚本配置时自动加载最近一次运行日志；`isDirty`/`navigationBlocked` 统一处理未保存页面的离开确认。
+- `Sidebar.vue` — 主导航 + 脚本列表管理 + 工作流分组。脚本列表支持新增、重命名、上移、下移和删除，只展示列表名称与脚本数，不展开脚本；服务/定时任务位于顶部主导航，设置固定在底部。
+- `ScriptListPane.vue` — 当前列表的紧凑脚本栏，提供搜索、运行状态和新增入口。宽屏与详情组成三栏，窗口宽度不超过 1050px 时在脚本栏与详情间切换。
 - `ScriptConfig.vue` — 脚本配置表单。支持 script、module、custom 三种启动模式；选择脚本路径后自动调用 `InferFromScriptPath` 推断虚拟环境解释器和工作目录；custom 模式只显示工作目录和完整命令输入；工作目录可直接用 VS Code 打开。
 - `WorkflowEditor.vue` — 拖拽画布（Vue Flow）。左侧脚本列表支持搜索和拖入，节点双击跳转脚本配置并加载最近日志。支持自动布局、复制、定时设置、真实停止和未保存保护。
 - `TimerModal.vue` — 定时规则配置弹窗。支持新建和编辑已有 schedule，支持从 Schedule 总览选择脚本/工作流目标，支持快捷规则（每日一次、每天多时刻、每周、工作日、循环间隔）和自定义 5 位 cron；自定义 cron 支持多行导入，空行忽略，重复行会拦截，同一目标已有启用规则或导入内容之间存在时间交集时提示可能重复触发；每天多时刻和多行导入会保存为多条 `schedules` 记录。
@@ -94,6 +96,7 @@ cd frontend && npm install && cd ..
 - 托盘双图标：`build/windows/icon_free.ico`（空闲）/ `build/windows/icon_busy.ico`（有脚本运行），通过 `//go:embed` 内嵌，`script.OnRunningChange` 回调切换。
 - systray goroutine 必须 `goruntime.LockOSThread()`，否则休眠唤醒后消息泵失效。
 - SQLite 使用 WAL 模式 + `busy_timeout=5000`，并通过 `db.ExecWrite` 串行化核心写入、对 busy/locked 做短重试，防止并发日志写入与状态更新互相阻塞导致状态停在 running。
+- 脚本归属以 `scripts.list_id` 为准；`list_id IS NULL` 表示“未分类”。“全部脚本”和“未分类”是前端系统列表，不写入 `script_lists`；删除用户列表只清空关联脚本的 `list_id`。
 - 工作流定时任务在 `schedules` 表中用负数 `script_id`（`-workflowId`）存储，`addScheduleJob` 统一处理正负数分发。
 - 删除脚本/工作流时必须同步移除关联 schedule 和内存 scheduler job；被工作流引用的脚本禁止直接删除。定时任务注册失败必须回滚数据库与旧 scheduler 状态。
 - 新建或有未保存修改的脚本/工作流不能运行；运行中不能删除或修改结构性配置。所有异步操作必须立即显示处理中状态并阻止重复提交。

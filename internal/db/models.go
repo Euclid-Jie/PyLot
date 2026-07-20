@@ -14,6 +14,7 @@ type Script struct {
 	ID              int       `json:"id"`
 	Name            string    `json:"name"`
 	Category        string    `json:"category"`
+	ListID          int       `json:"listId"`
 	InterpreterPath string    `json:"interpreterPath"`
 	WorkDir         string    `json:"workDir"`
 	ScriptPath      string    `json:"scriptPath"`
@@ -23,6 +24,13 @@ type Script struct {
 	TimeoutSeconds  int       `json:"timeoutSeconds"`
 	CreatedAt       time.Time `json:"createdAt"`
 	UpdatedAt       time.Time `json:"updatedAt"`
+}
+
+type ScriptList struct {
+	ID          int    `json:"id"`
+	Name        string `json:"name"`
+	SortOrder   int    `json:"sortOrder"`
+	ScriptCount int    `json:"scriptCount"`
 }
 
 type Schedule struct {
