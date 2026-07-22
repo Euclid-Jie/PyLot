@@ -4,11 +4,12 @@ import (
 	"errors"
 	"fmt"
 	"math/bits"
-	"os/exec"
 	"path/filepath"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"script-manager/internal/processutil"
 
 	"golang.org/x/sys/windows"
 )
@@ -123,7 +124,7 @@ func KillPortOwner(port, expectedPID int) error {
 	if expectedPID <= 4 {
 		return fmt.Errorf("不能结束系统进程 PID %d", expectedPID)
 	}
-	if err := exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", expectedPID)).Run(); err != nil {
+	if err := processutil.KillTree(expectedPID); err != nil {
 		return fmt.Errorf("结束 PID %d 失败: %w", expectedPID, err)
 	}
 	return WaitPortFree(port, 5*time.Second)

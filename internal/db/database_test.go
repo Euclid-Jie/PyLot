@@ -35,6 +35,16 @@ func TestScriptListMigrationRunsOnce(t *testing.T) {
 	if err := createTables(); err != nil {
 		t.Fatal(err)
 	}
+	if _, err := DB.Exec(`UPDATE scripts SET description='旧脚本说明' WHERE name='Crawler'`); err != nil {
+		t.Fatalf("description migration failed: %v", err)
+	}
+	var description string
+	if err := DB.QueryRow(`SELECT description FROM scripts WHERE name='Crawler'`).Scan(&description); err != nil {
+		t.Fatal(err)
+	}
+	if description != "旧脚本说明" {
+		t.Fatalf("description = %q", description)
+	}
 
 	var assigned, cleared int
 	if err := DB.QueryRow(`SELECT COUNT(*) FROM scripts WHERE list_id IS NOT NULL`).Scan(&assigned); err != nil {

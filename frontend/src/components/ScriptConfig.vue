@@ -31,6 +31,16 @@
         </select>
       </div>
 
+      <div class="form-row description-row">
+        <label>程序说明</label>
+        <textarea
+          v-model="form.description"
+          class="ui-input description-input"
+          rows="2"
+          placeholder="记录这个程序的用途、数据来源或注意事项"
+        ></textarea>
+      </div>
+
       <div class="form-row">
         <label>启动模式</label>
         <div class="mode-toggle">
@@ -93,7 +103,7 @@
   </div>
 
   <TempArgsModal v-if="showTempArgs" :fixedArgs="buildFixedArgs()" @run="doRun" @close="showTempArgs = false" />
-  <TimerModal v-if="showTimer" :scriptId="form.id" @close="showTimer = false" />
+  <TimerModal v-if="showTimer" :scriptId="form.id" :show-existing="true" @close="showTimer = false" />
   <ConfirmDialog v-if="showDeleteConfirm" title="删除脚本？" :message="`脚本“${form.name}”及其配置将被删除，此操作无法撤销。`" @confirm="handleDelete" @cancel="showDeleteConfirm = false" />
   <div v-if="toast" class="ui-toast">{{ toast }}</div>
 </template>
@@ -118,7 +128,7 @@ const scriptLists = ref([])
 let hydrating = true
 
 const form = ref({
-  id: null, name: '', category: '', listId: 0, interpreterPath: 'python',
+  id: null, name: '', description: '', category: '', listId: 0, interpreterPath: 'python',
   workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '',
   timeoutSeconds: 0, privateEnv: '{}'
 })
@@ -145,7 +155,7 @@ async function loadScript() {
   store.clearDirty()
   if (isNew.value) {
     const selectedListId = typeof store.selectedScriptListId === 'number' ? store.selectedScriptListId : 0
-    form.value = { id: null, name: '', category: '', listId: selectedListId, interpreterPath: 'python', workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '', timeoutSeconds: 0, privateEnv: '{}' }
+    form.value = { id: null, name: '', description: '', category: '', listId: selectedListId, interpreterPath: 'python', workDir: '', scriptPath: '', launchMode: 'script', fixedArgs: '', timeoutSeconds: 0, privateEnv: '{}' }
     envPairs.value = []
     argPairs.value = []
     await finishHydration()
@@ -350,7 +360,9 @@ function normalizeError(error) {
 .form-row > label:first-child { width: 80px; font-size: var(--type-section-title); color: var(--text-dim); flex-shrink: 0; text-align: right; }
 .label-inline { font-size: var(--type-section-title); color: var(--text-dim); flex-shrink: 0; white-space: nowrap; }
 .form-row input, .form-row select { flex: 1; padding: 7px 10px; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font-size: var(--type-section-title); transition: border-color .12s, box-shadow .12s; }
-.form-row input:focus, .form-row select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.form-row input:focus, .form-row select:focus, .form-row textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+.description-row { align-items: flex-start; }
+.description-input { flex: 1; min-height: 62px; padding: 9px 10px; resize: vertical; background: var(--input-bg); border: 1px solid var(--border); color: var(--text); border-radius: var(--radius); font: inherit; line-height: 1.5; }
 .form-row > button { padding: 6px 12px; background: var(--surface2); color: var(--text-dim); border: 1px solid var(--border); border-radius: var(--radius); font-size: var(--type-body); flex-shrink: 0; transition: background .12s, color .12s; }
 .form-row > button:hover { background: var(--surface); color: var(--text); border-color: var(--text-muted); }
 .mode-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -383,7 +395,7 @@ fieldset:disabled { opacity: 0.4; pointer-events: none; }
 .form-row { min-height: 44px; margin-bottom: 6px; }
 .form-row > label:first-child { width: 88px; color: var(--text-dim); font-size: var(--type-label); font-weight: var(--weight-regular); text-align: left; }
 .label-inline { font-size: var(--type-label); font-weight: var(--weight-regular); }
-.form-row input, .form-row select, .env-row input { min-height: var(--control-lg); padding: 7px 10px; border-color: var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text); font-size: var(--type-body); }
+.form-row input, .form-row select, .form-row textarea, .env-row input { min-height: var(--control-lg); padding: 7px 10px; border-color: var(--border); border-radius: var(--radius); background: var(--input-bg); color: var(--text); font-size: var(--type-body); }
 .form-row > button.ui-btn { min-height: var(--control-lg); padding: 0 12px; background: var(--surface); color: var(--text-dim); }
 .form-row > button.workdir-icon-btn { width: var(--control-lg); height: var(--control-lg); min-height: var(--control-lg); padding: 0; background: var(--surface); }
 .mode-toggle { background: var(--input-bg); }

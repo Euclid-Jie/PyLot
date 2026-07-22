@@ -57,7 +57,7 @@
     </div>
   </div>
   <div v-if="toast" class="ui-toast">{{ toast }}</div>
-  <TimerModal v-if="showTimer" :scriptId="-selectedWfId" @close="showTimer = false" />
+  <TimerModal v-if="showTimer" :scriptId="-selectedWfId" :show-existing="true" @close="showTimer = false" />
   <ConfirmDialog v-if="showDeleteConfirm" title="删除工作流？" :message="`工作流“${wfName}”及其编排关系将被删除，此操作无法撤销。`" @confirm="deleteWorkflow" @cancel="showDeleteConfirm = false" />
 </template>
 

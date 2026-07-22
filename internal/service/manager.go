@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"script-manager/internal/commandline"
+	"script-manager/internal/processutil"
 )
 
 const (
@@ -178,7 +179,7 @@ func Stop(id int64) (Snapshot, error) {
 	snap := snapshotLocked(id, st)
 	mu.Unlock()
 
-	err := exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", cmd.Process.Pid)).Run()
+	err := processutil.KillTree(cmd.Process.Pid)
 	return snap, err
 }
 

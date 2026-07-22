@@ -3,7 +3,6 @@ package script
 import (
 	"bytes"
 	"database/sql"
-	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -13,6 +12,7 @@ import (
 
 	"script-manager/internal/commandline"
 	"script-manager/internal/db"
+	"script-manager/internal/processutil"
 )
 
 type RunTask struct {
@@ -276,7 +276,7 @@ func StopScript(scriptID int) {
 		return
 	}
 	pid := cmd.Process.Pid
-	exec.Command("taskkill", "/F", "/T", "/PID", fmt.Sprintf("%d", pid)).Run()
+	processutil.KillTree(pid)
 }
 
 func IsRunning(scriptID int) bool {

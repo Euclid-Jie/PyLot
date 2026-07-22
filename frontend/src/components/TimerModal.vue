@@ -4,7 +4,7 @@
       <header class="modal-header">
         <div>
           <div class="eyebrow">Schedule</div>
-          <h3 id="timer-title">{{ isEditing ? '编辑定时规则' : '定时规则配置' }}</h3>
+          <h3 id="timer-title">{{ modalTitle }}</h3>
         </div>
         <button class="ui-icon-btn" title="关闭" aria-label="关闭" @click="emit('close')"><UiIcon name="x" /></button>
       </header>
@@ -22,6 +22,45 @@
             </optgroup>
           </select>
         </div>
+
+        <section v-if="showExisting" class="existing-block">
+          <div class="existing-header">
+            <div>
+              <strong>已有定时</strong>
+              <span>{{ currentTargetSchedules.length }} 条</span>
+            </div>
+          </div>
+          <div v-if="currentTargetSchedules.length" class="existing-list">
+            <div
+              v-for="item in currentTargetSchedules"
+              :key="item.scheduleId || item.id"
+              class="existing-item"
+              :class="{ active: (item.scheduleId || item.id) === scheduleId, inherited: item.inherited }"
+            >
+              <span class="existing-main">
+                <span class="existing-rule-line">
+                  <code>{{ item.cronExpr }}</code>
+                  <span v-if="item.sourceWorkflowName" class="workflow-source">工作流：{{ item.sourceWorkflowName }}</span>
+                </span>
+                <small>{{ formatNextRun(item) }}</small>
+              </span>
+              <div v-if="!item.inherited" class="existing-actions">
+                <button
+                  :class="['schedule-action', 'toggle', item.enabled ? 'on' : 'off']"
+                  :disabled="isSchedulePending(item)"
+                  :title="item.enabled ? '点击禁用' : '点击启用'"
+                  @click="toggleExistingSchedule(item)"
+                >{{ isSchedulePending(item) ? '处理中' : (item.enabled ? '启用' : '禁用') }}</button>
+                <button class="schedule-action edit" :disabled="isSchedulePending(item)" @click="beginEdit(item)">编辑</button>
+                <button class="schedule-action delete" :disabled="isSchedulePending(item)" @click="deleteTarget = item">删除</button>
+              </div>
+              <span v-else class="managed-label">由工作流管理</span>
+            </div>
+          </div>
+          <div v-else class="existing-empty">该{{ targetTypeLabel }}暂无定时任务，可在下方新增。</div>
+        </section>
+
+        <div v-if="showExisting" class="editor-heading">{{ isEditing ? '编辑定时' : '新增定时' }}</div>
 
         <div class="field">
           <label>配置方式</label>
@@ -136,11 +175,19 @@
       </footer>
     </section>
   </div>
+  <ConfirmDialog
+    v-if="deleteTarget"
+    title="删除定时任务？"
+    :message="`定时规则“${deleteTarget.cronExpr}”将被永久删除，此操作无法撤销。`"
+    @confirm="deleteExistingSchedule"
+    @cancel="deleteTarget = null"
+  />
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { GetScheduleOverview, GetScripts, GetWorkflows, SaveSchedules } from '../../wailsjs/go/main/App.js'
+import { DeleteSchedule, GetScheduleOverview, GetScripts, GetWorkflows, SaveSchedules, ToggleSchedule } from '../../wailsjs/go/main/App.js'
+import ConfirmDialog from './ConfirmDialog.vue'
 import UiIcon from './UiIcon.vue'
 
 const props = defineProps({
@@ -148,13 +195,15 @@ const props = defineProps({
   schedule: { type: Object, default: null },
   allowTargetSelect: { type: Boolean, default: false },
   existingSchedules: { type: Array, default: () => [] },
+  showExisting: { type: Boolean, default: false },
 })
 const emit = defineEmits(['close', 'saved'])
 
 const scripts = ref([])
 const workflows = ref([])
 const loadedSchedules = ref([])
-const selectedScriptId = ref(props.schedule?.scriptId ?? props.scriptId ?? 0)
+const activeSchedule = ref(props.schedule)
+const selectedScriptId = ref(activeSchedule.value?.scriptId ?? props.scriptId ?? 0)
 const scheduleMode = ref('preset')
 const presetType = ref('daily_once')
 const timeVal = ref('08:00')
@@ -167,10 +216,15 @@ const enabled = ref(true)
 const saving = ref(false)
 const toast = ref('')
 const actionError = ref('')
+const pendingScheduleIds = ref([])
+const deleteTarget = ref(null)
 
-const isEditing = computed(() => !!props.schedule?.scheduleId || !!props.schedule?.id)
-const scheduleId = computed(() => props.schedule?.scheduleId || props.schedule?.id || 0)
+const isEditing = computed(() => !!activeSchedule.value?.scheduleId || !!activeSchedule.value?.id)
+const scheduleId = computed(() => activeSchedule.value?.scheduleId || activeSchedule.value?.id || 0)
 const allowTargetSelect = computed(() => props.allowTargetSelect)
+const showExisting = computed(() => props.showExisting)
+const targetTypeLabel = computed(() => (props.scriptId || selectedScriptId.value) < 0 ? '工作流' : '脚本')
+const modalTitle = computed(() => showExisting.value ? `${targetTypeLabel.value}定时任务` : (isEditing.value ? '编辑定时规则' : '定时规则配置'))
 
 const weekdays = [
   { value: 1, label: '周一' },
@@ -191,6 +245,31 @@ const customPresets = [
 
 const intervalLimit = computed(() => intervalUnit.value === 'minutes' ? 59 : 23)
 const effectiveExistingSchedules = computed(() => props.existingSchedules.length ? props.existingSchedules : loadedSchedules.value)
+const workflowById = computed(() => new Map(workflows.value.map(workflow => [workflow.id, workflow])))
+const currentTargetSchedules = computed(() => {
+  const targetID = props.scriptId || selectedScriptId.value
+  const direct = effectiveExistingSchedules.value
+    .filter(item => item.scriptId === targetID)
+    .map(item => ({ ...item, inherited: false, sourceWorkflowName: '' }))
+
+  const inherited = targetID > 0
+    ? effectiveExistingSchedules.value.flatMap(item => {
+        if (item.scriptId >= 0) return []
+        const workflow = workflowById.value.get(-item.scriptId)
+        if (!workflow || !workflowContainsScript(workflow, targetID)) return []
+        return [{
+          ...item,
+          inherited: true,
+          sourceWorkflowName: workflow.name || item.scriptName || `工作流 #${workflow.id}`,
+        }]
+      })
+    : []
+
+  return [...direct, ...inherited].sort((a, b) => {
+    if (a.inherited !== b.inherited) return a.inherited ? 1 : -1
+    return (a.scheduleId || a.id || 0) - (b.scheduleId || b.id || 0)
+  })
+})
 
 const generatedCrons = computed(() => {
   if (scheduleMode.value === 'custom') {
@@ -253,7 +332,7 @@ const displayWarning = computed(() => {
 })
 
 onMounted(async () => {
-  applySchedule(props.schedule)
+  applySchedule(activeSchedule.value)
   const schedulePromise = props.existingSchedules.length
     ? Promise.resolve()
     : GetScheduleOverview().then(items => {
@@ -267,14 +346,23 @@ onMounted(async () => {
     ])
     scripts.value = scriptList || []
     workflows.value = workflowList || []
+  } else if (props.showExisting) {
+    const [workflowList] = await Promise.all([
+      GetWorkflows(),
+      schedulePromise,
+    ])
+    workflows.value = workflowList || []
   } else {
     await schedulePromise
   }
 })
 
-watch(() => props.schedule, applySchedule)
+watch(() => props.schedule, value => {
+  activeSchedule.value = value
+  applySchedule(value)
+})
 watch(() => props.scriptId, value => {
-  if (!props.schedule && !props.allowTargetSelect) selectedScriptId.value = value || 0
+  if (!activeSchedule.value && !props.allowTargetSelect) selectedScriptId.value = value || 0
 })
 
 function cronForTime(value, dayExpr = '*') {
@@ -303,6 +391,15 @@ function parseCronLines(value) {
     .filter(Boolean)
 }
 
+function workflowContainsScript(workflow, scriptID) {
+  try {
+    const graph = typeof workflow.graph === 'string' ? JSON.parse(workflow.graph || '{}') : (workflow.graph || {})
+    return Array.isArray(graph.nodes) && graph.nodes.some(node => Number(node.scriptId) === Number(scriptID))
+  } catch {
+    return false
+  }
+}
+
 function findDuplicateCron(crons) {
   const seen = new Set()
   for (const expr of crons) {
@@ -329,16 +426,19 @@ function findCronConflicts(crons) {
     }
   }
 
-  const existing = effectiveExistingSchedules.value
+  const existingSource = showExisting.value && selectedScriptId.value > 0
+    ? currentTargetSchedules.value
+    : effectiveExistingSchedules.value
+  const existing = existingSource
     .filter(item => {
       const id = item.scheduleId || item.id || 0
       return id !== scheduleId.value &&
         item.enabled &&
-        item.scriptId === selectedScriptId.value
+        (item.inherited || item.scriptId === selectedScriptId.value)
     })
     .map(item => ({
       expr: normalizeCron(item.cronExpr),
-      label: `已有 #${item.scheduleId || item.id}`,
+      label: item.inherited ? `工作流「${item.sourceWorkflowName}」` : `已有 #${item.scheduleId || item.id}`,
       parsed: parseCronFields(item.cronExpr),
     }))
 
@@ -447,6 +547,7 @@ function applySchedule(schedule) {
   actionError.value = ''
   toast.value = ''
   selectedScriptId.value = schedule?.scriptId ?? props.scriptId ?? 0
+  resetScheduleFields()
   if (!schedule) return
 
   enabled.value = schedule.enabled === true || schedule.enabled === 1
@@ -465,6 +566,88 @@ function applySchedule(schedule) {
   if (parsed.days) selectedDays.value = parsed.days
   if (parsed.intervalEvery) intervalEvery.value = parsed.intervalEvery
   if (parsed.intervalUnit) intervalUnit.value = parsed.intervalUnit
+}
+
+function resetScheduleFields() {
+  scheduleMode.value = 'preset'
+  presetType.value = 'daily_once'
+  timeVal.value = '08:00'
+  multiTimes.value = ['08:00', '12:00']
+  selectedDays.value = [1]
+  intervalEvery.value = 1
+  intervalUnit.value = 'hours'
+  customCron.value = '0 8 * * *'
+  enabled.value = true
+}
+
+function beginEdit(schedule) {
+  activeSchedule.value = schedule
+  applySchedule(schedule)
+}
+
+function scheduleItemID(schedule) {
+  return schedule?.scheduleId || schedule?.id || 0
+}
+
+function isSchedulePending(schedule) {
+  return pendingScheduleIds.value.includes(scheduleItemID(schedule))
+}
+
+async function refreshSchedules() {
+  loadedSchedules.value = await GetScheduleOverview() || []
+  emit('saved')
+}
+
+async function toggleExistingSchedule(schedule) {
+  const id = scheduleItemID(schedule)
+  if (!id || schedule.inherited || isSchedulePending(schedule)) return
+  pendingScheduleIds.value.push(id)
+  actionError.value = ''
+  try {
+    await ToggleSchedule(id, !schedule.enabled)
+    await refreshSchedules()
+    if (scheduleId.value === id) {
+      const latest = loadedSchedules.value.find(item => scheduleItemID(item) === id)
+      if (latest) {
+        activeSchedule.value = latest
+        applySchedule(latest)
+      }
+    }
+  } catch (err) {
+    actionError.value = formatError(err)
+  } finally {
+    pendingScheduleIds.value = pendingScheduleIds.value.filter(scheduleID => scheduleID !== id)
+  }
+}
+
+async function deleteExistingSchedule() {
+  const schedule = deleteTarget.value
+  const id = scheduleItemID(schedule)
+  if (!id || schedule?.inherited || isSchedulePending(schedule)) return
+  pendingScheduleIds.value.push(id)
+  actionError.value = ''
+  try {
+    await DeleteSchedule(id)
+    if (scheduleId.value === id) {
+      activeSchedule.value = null
+      applySchedule(null)
+    }
+    await refreshSchedules()
+    toast.value = '定时规则已删除'
+    deleteTarget.value = null
+  } catch (err) {
+    actionError.value = formatError(err)
+  } finally {
+    pendingScheduleIds.value = pendingScheduleIds.value.filter(scheduleID => scheduleID !== id)
+  }
+}
+
+function formatNextRun(schedule) {
+  if (!schedule.enabled) return '当前已禁用'
+  if (!schedule.nextRun) return '暂无下次运行时间'
+  const value = new Date(schedule.nextRun)
+  if (Number.isNaN(value.getTime()) || value.getFullYear() <= 1) return '暂无下次运行时间'
+  return `下次：${value.toLocaleString()}`
 }
 
 function parseCronToPreset(expr) {
@@ -555,7 +738,15 @@ async function handleSave() {
       toast.value = generatedCrons.value.length > 1 ? `已保存 ${generatedCrons.value.length} 条定时规则` : '定时设置成功'
     }
     emit('saved')
-    setTimeout(() => emit('close'), 300)
+    if (showExisting.value) {
+      const successMessage = toast.value
+      loadedSchedules.value = await GetScheduleOverview() || []
+      activeSchedule.value = null
+      applySchedule(null)
+      toast.value = successMessage
+    } else {
+      setTimeout(() => emit('close'), 300)
+    }
   } catch (err) {
     actionError.value = formatError(err)
   } finally {
@@ -631,6 +822,163 @@ h3 {
 .modal-body {
   padding: 20px 24px;
   overflow-y: auto;
+}
+
+.existing-block {
+  margin-bottom: 20px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.existing-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.existing-header > div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.existing-header strong,
+.editor-heading {
+  color: var(--text);
+  font-size: var(--type-section-title);
+  font-weight: var(--weight-semibold);
+}
+
+.existing-header span {
+  color: var(--text-muted);
+  font-size: var(--type-label);
+}
+
+.existing-list {
+  display: grid;
+  gap: 7px;
+}
+
+.existing-item {
+  width: 100%;
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--text-dim);
+  text-align: left;
+}
+
+.existing-item.active {
+  border-color: rgba(47, 129, 247, .45);
+  background: var(--accent-dim);
+}
+
+.existing-main {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 3px;
+}
+
+.existing-main code {
+  width: fit-content;
+}
+
+.existing-rule-line {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.workflow-source {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 7px;
+  border: 1px solid rgba(210, 153, 34, .35);
+  border-radius: var(--radius-sm);
+  background: var(--orange-dim);
+  color: var(--orange);
+  font-size: var(--type-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.existing-main small {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--type-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.existing-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.schedule-action {
+  min-width: 38px;
+  height: 28px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: var(--type-label);
+}
+
+.schedule-action:hover:not(:disabled) {
+  background: var(--surface2);
+  color: var(--text);
+}
+
+.schedule-action.toggle {
+  min-width: 52px;
+}
+
+.schedule-action.toggle.on { color: var(--green); }
+.schedule-action.toggle.off { color: var(--text-muted); }
+.schedule-action.edit { color: var(--accent); }
+.schedule-action.delete { color: var(--red); }
+
+.schedule-action.delete:hover:not(:disabled) {
+  background: var(--red-dim);
+  color: var(--red);
+}
+
+.schedule-action:disabled {
+  opacity: .55;
+  cursor: not-allowed;
+}
+
+.managed-label {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--type-label);
+}
+
+.existing-empty {
+  padding: 10px 0 2px;
+  color: var(--text-muted);
+  font-size: var(--type-body);
+}
+
+.editor-heading {
+  margin: 0 0 14px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--border);
 }
 
 .field {
@@ -962,6 +1310,24 @@ code {
 @media (max-width: 720px) {
   .schedule-modal {
     width: 100%;
+  }
+
+  .existing-item {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .existing-main {
+    flex-basis: 100%;
+  }
+
+  .existing-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .managed-label {
+    margin-left: auto;
   }
 
   .field {

@@ -42,6 +42,7 @@ func createTables() error {
 	CREATE TABLE IF NOT EXISTS scripts (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL,
+		description TEXT NOT NULL DEFAULT '',
 		category TEXT NOT NULL,
 		list_id INTEGER,
 		interpreter_path TEXT,
@@ -116,6 +117,7 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE services ADD COLUMN port INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE services ADD COLUMN protocol TEXT NOT NULL DEFAULT 'http'`)
 	DB.Exec(`ALTER TABLE scripts ADD COLUMN list_id INTEGER`)
+	DB.Exec(`ALTER TABLE scripts ADD COLUMN description TEXT NOT NULL DEFAULT ''`)
 	if err := migrateScriptLists(); err != nil {
 		return err
 	}

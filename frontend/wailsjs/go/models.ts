@@ -130,6 +130,7 @@ export namespace db {
 	export class Script {
 	    id: number;
 	    name: string;
+	    description: string;
 	    category: string;
 	    listId: number;
 	    interpreterPath: string;
@@ -152,6 +153,7 @@ export namespace db {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.name = source["name"];
+	        this.description = source["description"];
 	        this.category = source["category"];
 	        this.listId = source["listId"];
 	        this.interpreterPath = source["interpreterPath"];
