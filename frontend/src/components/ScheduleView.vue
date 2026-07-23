@@ -35,13 +35,13 @@
             <tr>
               <th>目标</th>
               <th>Cron 表达式</th>
-              <th>下次运行时间</th>
+              <th>{{ scheduleFilter === 'upcoming' ? '计划运行时间' : '下次运行时间' }}</th>
               <th>状态</th>
               <th>操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in filteredOverview" :key="item.scheduleId">
+            <tr v-for="item in filteredOverview" :key="item.occurrenceKey || item.scheduleId">
               <td>
                 <div class="name-cell">
                   <span class="type-dot" :class="item.scriptId < 0 ? 'wf' : 'sc'"></span>
@@ -193,10 +193,25 @@ const showDeleteId = ref(null)
 const pendingScheduleIds = ref([])
 let timer = null
 
+const UPCOMING_DISPLAY_LIMIT = 50
+
 const sortedOverview = computed(() => [...overview.value].sort(compareSchedule))
-const filteredOverview = computed(() => sortedOverview.value.filter(matchesScheduleFilter))
+const upcomingOverview = computed(() => overview.value
+  .filter(item => item.enabled)
+  .flatMap(item => (item.upcomingRuns || [])
+    .filter(isValidDate)
+    .map(nextRun => ({
+      ...item,
+      nextRun,
+      occurrenceKey: `${item.scheduleId}:${new Date(nextRun).getTime()}`,
+    })))
+  .sort(compareSchedule)
+  .slice(0, UPCOMING_DISPLAY_LIMIT))
+const filteredOverview = computed(() => scheduleFilter.value === 'upcoming'
+  ? upcomingOverview.value
+  : sortedOverview.value.filter(matchesScheduleFilter))
 const filterOptions = computed(() => [
-  { value: 'upcoming', label: '即将运行', count: overview.value.filter(item => item.enabled && isValidDate(item.nextRun)).length },
+  { value: 'upcoming', label: '即将运行', count: upcomingOverview.value.length },
   { value: 'today', label: '今日运行', count: overview.value.filter(item => item.enabled && isToday(item.nextRun)).length },
   { value: 'stopped', label: '已停止', count: overview.value.filter(item => !item.enabled).length },
   { value: 'all', label: '全部', count: overview.value.length },
@@ -284,7 +299,6 @@ function compareSchedule(a, b) {
 }
 
 function matchesScheduleFilter(item) {
-  if (scheduleFilter.value === 'upcoming') return item.enabled && isValidDate(item.nextRun)
   if (scheduleFilter.value === 'today') return item.enabled && isToday(item.nextRun)
   if (scheduleFilter.value === 'stopped') return !item.enabled
   return true

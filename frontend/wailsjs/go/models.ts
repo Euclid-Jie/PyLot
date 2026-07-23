@@ -455,6 +455,7 @@ export namespace scheduler {
 	    cronExpr: string;
 	    // Go type: time
 	    nextRun: any;
+	    upcomingRuns: string[];
 	    enabled: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -468,6 +469,7 @@ export namespace scheduler {
 	        this.scriptName = source["scriptName"];
 	        this.cronExpr = source["cronExpr"];
 	        this.nextRun = this.convertValues(source["nextRun"], null);
+	        this.upcomingRuns = source["upcomingRuns"];
 	        this.enabled = source["enabled"];
 	    }
 	

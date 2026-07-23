@@ -10,12 +10,13 @@ import (
 )
 
 type ScheduleInfo struct {
-	ScheduleID int       `json:"scheduleId"`
-	ScriptID   int       `json:"scriptId"`
-	ScriptName string    `json:"scriptName"`
-	CronExpr   string    `json:"cronExpr"`
-	NextRun    time.Time `json:"nextRun"`
-	Enabled    bool      `json:"enabled"`
+	ScheduleID   int       `json:"scheduleId"`
+	ScriptID     int       `json:"scriptId"`
+	ScriptName   string    `json:"scriptName"`
+	CronExpr     string    `json:"cronExpr"`
+	NextRun      time.Time `json:"nextRun"`
+	UpcomingRuns []string  `json:"upcomingRuns"`
+	Enabled      bool      `json:"enabled"`
 }
 
 type jobEntry struct {
@@ -28,6 +29,11 @@ var (
 	c    *cron.Cron
 	jobs = map[int]jobEntry{} // scheduleID -> jobEntry
 	mu   sync.Mutex
+)
+
+const (
+	upcomingRunWindow = 24 * time.Hour
+	upcomingRunLimit  = 50
 )
 
 func Init() {
@@ -81,15 +87,43 @@ func GetNextRunTimes() []ScheduleInfo {
 	mu.Lock()
 	defer mu.Unlock()
 	result := make([]ScheduleInfo, 0, len(jobs))
+	until := time.Now().Add(upcomingRunWindow)
 	for schedID, job := range jobs {
 		entry := c.Entry(job.entryID)
+		upcomingRuns := collectUpcomingRuns(entry.Schedule, entry.Next, until, upcomingRunLimit)
 		result = append(result, ScheduleInfo{
-			ScheduleID: schedID,
-			ScriptID:   job.scriptID,
-			CronExpr:   job.cronExpr,
-			NextRun:    entry.Next,
-			Enabled:    true,
+			ScheduleID:   schedID,
+			ScriptID:     job.scriptID,
+			CronExpr:     job.cronExpr,
+			NextRun:      entry.Next,
+			UpcomingRuns: formatRunTimes(upcomingRuns),
+			Enabled:      true,
 		})
 	}
 	return result
+}
+
+func formatRunTimes(runs []time.Time) []string {
+	formatted := make([]string, len(runs))
+	for i, run := range runs {
+		formatted[i] = run.Format(time.RFC3339Nano)
+	}
+	return formatted
+}
+
+func collectUpcomingRuns(schedule cron.Schedule, next, until time.Time, limit int) []time.Time {
+	if schedule == nil || next.IsZero() || limit <= 0 {
+		return nil
+	}
+
+	runs := make([]time.Time, 0, limit)
+	for !next.After(until) && len(runs) < limit {
+		runs = append(runs, next)
+		following := schedule.Next(next)
+		if !following.After(next) {
+			break
+		}
+		next = following
+	}
+	return runs
 }

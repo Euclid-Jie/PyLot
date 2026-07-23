@@ -664,6 +664,7 @@ func (a *App) GetScheduleOverview() []scheduler.ScheduleInfo {
 		}
 		if nr, ok := nextRuns[schedID]; ok {
 			info.NextRun = nr.NextRun
+			info.UpcomingRuns = nr.UpcomingRuns
 		}
 		result = append(result, info)
 	}
