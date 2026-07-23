@@ -103,8 +103,49 @@
               <strong>{{ selectedRun.targetName }}</strong>
               <span>{{ fmtDateTime(selectedRun.startedAt) }} - {{ selectedRun.endedAt ? fmtDateTime(selectedRun.endedAt) : '运行中' }}</span>
             </div>
-            <pre v-if="detailLog" class="detail-log">{{ detailLog }}</pre>
-            <div v-else class="detail-empty">{{ selectedRun.targetType === 'workflow' ? '工作流仅记录整体状态' : '该次运行没有日志输出' }}</div>
+            <div v-if="detailLoading" class="detail-empty">正在加载运行详情...</div>
+            <div v-else-if="detailError" class="detail-empty">{{ detailError }}</div>
+            <template v-else-if="selectedRun.targetType === 'workflow'">
+              <div v-if="workflowNodes.length" class="workflow-detail">
+                <label class="workflow-node-select">
+                  <span>工作流节点</span>
+                  <select :value="selectedWorkflowNode?.nodeId || ''" @change="selectWorkflowNodeById($event.target.value)">
+                    <option v-for="node in workflowNodes" :key="node.id" :value="node.nodeId">
+                      {{ node.scriptName }} · {{ statusText(node.status) }}
+                    </option>
+                  </select>
+                </label>
+                <div class="workflow-node-list" aria-label="工作流节点">
+                  <button
+                    v-for="node in workflowNodes"
+                    :key="node.id"
+                    :class="['workflow-node-row', { active: selectedWorkflowNode?.id === node.id }]"
+                    @click="selectWorkflowNode(node)"
+                  >
+                    <span :class="['node-state-dot', node.status]"></span>
+                    <span class="workflow-node-main">
+                      <strong>{{ node.scriptName || `脚本 #${node.scriptId}` }}</strong>
+                      <small>{{ fmtNodeDuration(node) }}</small>
+                    </span>
+                    <span :class="['workflow-node-status', node.status]">{{ statusText(node.status) }}</span>
+                  </button>
+                </div>
+                <section class="workflow-node-log">
+                  <div v-if="selectedWorkflowNode" class="node-log-header">
+                    <strong>{{ selectedWorkflowNode.scriptName || `脚本 #${selectedWorkflowNode.scriptId}` }}</strong>
+                    <span>{{ statusText(selectedWorkflowNode.status) }} · {{ fmtNodeDuration(selectedWorkflowNode) }}</span>
+                  </div>
+                  <div v-if="nodeLogLoading" class="detail-empty">正在加载节点日志...</div>
+                  <pre v-else-if="detailLog" class="detail-log">{{ detailLog }}</pre>
+                  <div v-else class="detail-empty">{{ nodeLogMessage }}</div>
+                </section>
+              </div>
+              <div v-else class="detail-empty">该次运行发生在节点日志记录功能启用前</div>
+            </template>
+            <template v-else>
+              <pre v-if="detailLog" class="detail-log">{{ detailLog }}</pre>
+              <div v-else class="detail-empty">该次运行没有日志输出</div>
+            </template>
           </template>
         </div>
       </div>
@@ -127,7 +168,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { DeleteSchedule, GetRunDetail, GetRunHistory, GetScheduleOverview, GetWorkflowRuns, ToggleSchedule } from '../../wailsjs/go/main/App.js'
+import { DeleteSchedule, GetRunDetail, GetRunHistory, GetScheduleOverview, GetWorkflowRunNodes, GetWorkflowRuns, ToggleSchedule } from '../../wailsjs/go/main/App.js'
 import TimerModal from './TimerModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import UiIcon from './UiIcon.vue'
@@ -136,6 +177,12 @@ const overview = ref([])
 const history = ref([])
 const selectedRun = ref(null)
 const detailLog = ref('')
+const detailLoading = ref(false)
+const detailError = ref('')
+const workflowNodes = ref([])
+const selectedWorkflowNode = ref(null)
+const nodeLogLoading = ref(false)
+const nodeLogMessage = ref('')
 const historyLoading = ref(false)
 const errorMsg = ref('')
 const showTimer = ref(false)
@@ -291,11 +338,13 @@ function targetTypeText(type) {
 
 function statusText(status) {
   const labels = {
+    pending: '等待中',
     success: '成功',
     error: '失败',
     running: '运行中',
     timeout: '超时',
     killed: '已终止',
+    skipped: '未执行',
   }
   return labels[status] || status || '-'
 }
@@ -310,20 +359,90 @@ function runKey(run) {
 }
 
 async function selectRun(run) {
+  if (!selectedRun.value || runKey(selectedRun.value) !== runKey(run)) selectedWorkflowNode.value = null
   selectedRun.value = run
   await loadSelectedDetail()
 }
 
 async function loadSelectedDetail() {
+  const previousNodeID = selectedWorkflowNode.value?.nodeId || ''
   detailLog.value = ''
+  detailError.value = ''
+  nodeLogMessage.value = ''
+  workflowNodes.value = []
   const run = selectedRun.value
   if (!run) return
-  if (run.targetType === 'script') {
-    const detail = await GetRunDetail(run.recordId)
-    detailLog.value = (detail?.logOutput || '').trim()
-  } else {
-    detailLog.value = (run.logPreview || '').trim()
+  detailLoading.value = true
+  try {
+    if (run.targetType === 'script') {
+      const detail = await GetRunDetail(run.recordId)
+      detailLog.value = (detail?.logOutput || '').trim()
+      selectedWorkflowNode.value = null
+      return
+    }
+
+    workflowNodes.value = await GetWorkflowRunNodes(run.recordId) || []
+    selectedWorkflowNode.value = chooseWorkflowNode(workflowNodes.value, previousNodeID)
+    await loadWorkflowNodeLog()
+  } catch (err) {
+    errorMsg.value = formatError(err)
+    detailError.value = '运行详情加载失败'
+    setTimeout(() => { errorMsg.value = '' }, 3000)
+  } finally {
+    detailLoading.value = false
   }
+}
+
+function chooseWorkflowNode(nodes, preferredNodeID = '') {
+  if (!nodes.length) return null
+  const preferred = nodes.find(node => node.nodeId === preferredNodeID)
+  if (preferred) return preferred
+  const failed = nodes.find(node => ['error', 'timeout', 'killed'].includes(node.status))
+  if (failed) return failed
+  return [...nodes].reverse().find(node => node.status !== 'pending' && node.status !== 'skipped') || nodes[0]
+}
+
+async function selectWorkflowNode(node) {
+  selectedWorkflowNode.value = node
+  await loadWorkflowNodeLog()
+}
+
+async function selectWorkflowNodeById(nodeID) {
+  const node = workflowNodes.value.find(item => item.nodeId === nodeID)
+  if (node) await selectWorkflowNode(node)
+}
+
+async function loadWorkflowNodeLog() {
+  detailLog.value = ''
+  nodeLogMessage.value = ''
+  const node = selectedWorkflowNode.value
+  if (!node) return
+  if (!node.runRecordId) {
+    nodeLogMessage.value = node.status === 'skipped' ? '该节点因前序节点失败而未执行' : '该节点尚未产生运行日志'
+    return
+  }
+
+  nodeLogLoading.value = true
+  try {
+    const detail = await GetRunDetail(node.runRecordId)
+    if (!detail) {
+      nodeLogMessage.value = '该节点的历史日志已被清理'
+      return
+    }
+    detailLog.value = (detail.logOutput || '').trim()
+    if (!detailLog.value) nodeLogMessage.value = '该节点没有日志输出'
+  } catch (err) {
+    errorMsg.value = formatError(err)
+    nodeLogMessage.value = '节点日志加载失败'
+    setTimeout(() => { errorMsg.value = '' }, 3000)
+  } finally {
+    nodeLogLoading.value = false
+  }
+}
+
+function fmtNodeDuration(node) {
+  if (!node?.startedAt) return node?.status === 'skipped' ? '未执行' : '-'
+  return fmtDuration(node)
 }
 
 function openAdd() {
@@ -835,6 +954,142 @@ code {
   white-space: nowrap;
 }
 
+.workflow-detail {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+  margin-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.workflow-node-select {
+  display: none;
+}
+
+.workflow-node-list {
+  min-height: 0;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  background: var(--sidebar-bg);
+}
+
+.workflow-node-row {
+  width: 100%;
+  min-height: 50px;
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.workflow-node-row:hover {
+  background: var(--surface-hover);
+}
+
+.workflow-node-row.active {
+  background: var(--accent-dim);
+}
+
+.node-state-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.node-state-dot.running {
+  background: var(--accent);
+}
+
+.node-state-dot.success {
+  background: var(--green);
+}
+
+.node-state-dot.error,
+.node-state-dot.timeout,
+.node-state-dot.killed {
+  background: var(--red);
+}
+
+.workflow-node-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.workflow-node-main strong,
+.workflow-node-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workflow-node-main strong {
+  font-size: var(--type-label);
+  font-weight: var(--weight-semibold);
+}
+
+.workflow-node-main small,
+.workflow-node-status {
+  color: var(--text-muted);
+  font-size: var(--type-caption);
+}
+
+.workflow-node-status.success {
+  color: var(--green);
+}
+
+.workflow-node-status.running {
+  color: var(--accent);
+}
+
+.workflow-node-status.error,
+.workflow-node-status.timeout,
+.workflow-node-status.killed {
+  color: var(--red);
+}
+
+.workflow-node-log {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding-left: 12px;
+}
+
+.node-log-header {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+  border-bottom: 1px solid var(--border);
+}
+
+.node-log-header strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--type-label);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-log-header span {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: var(--type-caption);
+}
+
 .detail-log {
   flex: 1;
   min-height: 0;
@@ -890,6 +1145,14 @@ code {
 }
 
 @media (max-width: 960px) {
+  .schedule-card {
+    flex: .75;
+  }
+
+  .history-panel {
+    flex: 1.25;
+  }
+
   .view-header {
     align-items: flex-start;
     flex-direction: column;
@@ -913,6 +1176,54 @@ code {
     max-height: 220px;
     border-right: none;
     border-bottom: 1px solid var(--border);
+  }
+}
+
+@media (max-width: 1120px) {
+  .workflow-detail {
+    display: flex;
+    flex-direction: column;
+    border-top: 0;
+  }
+
+  .workflow-node-select {
+    display: grid;
+    gap: 5px;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: var(--type-caption);
+  }
+
+  .workflow-node-select select {
+    width: 100%;
+    min-height: 34px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--input-bg);
+    color: var(--text);
+  }
+
+  .workflow-node-list {
+    display: none;
+  }
+
+  .workflow-node-log {
+    flex: 1;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 720px) {
+  .detail-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .detail-meta span {
+    white-space: normal;
   }
 }
 </style>

@@ -54,6 +54,8 @@ export function GetServicePortStatus(arg1:number):Promise<main.ServicePortStatus
 
 export function GetWindowSize():Promise<number|number>;
 
+export function GetWorkflowRunNodes(arg1:number):Promise<Array<db.WorkflowRunNode>>;
+
 export function GetWorkflowRuns(arg1:number):Promise<Array<db.WorkflowRun>>;
 
 export function GetWorkflows():Promise<Array<db.Workflow>>;

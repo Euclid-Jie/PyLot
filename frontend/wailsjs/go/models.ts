@@ -283,9 +283,58 @@ export namespace db {
 		    return a;
 		}
 	}
+	export class WorkflowRunNode {
+	    id: number;
+	    workflowRunId: number;
+	    nodeId: string;
+	    scriptId: number;
+	    scriptName: string;
+	    status: string;
+	    // Go type: time
+	    startedAt?: any;
+	    // Go type: time
+	    endedAt?: any;
+	    runRecordId: number;
+	    sortOrder: number;
+
+	    static createFrom(source: any = {}) {
+	        return new WorkflowRunNode(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.workflowRunId = source["workflowRunId"];
+	        this.nodeId = source["nodeId"];
+	        this.scriptId = source["scriptId"];
+	        this.scriptName = source["scriptName"];
+	        this.status = source["status"];
+	        this.startedAt = this.convertValues(source["startedAt"], null);
+	        this.endedAt = this.convertValues(source["endedAt"], null);
+	        this.runRecordId = source["runRecordId"];
+	        this.sortOrder = source["sortOrder"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
-
 export namespace main {
 	
 	export class ScriptInferResult {

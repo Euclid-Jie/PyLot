@@ -100,6 +100,20 @@ func createTables() error {
 		started_at DATETIME,
 		ended_at DATETIME
 	);
+	CREATE TABLE IF NOT EXISTS workflow_run_nodes (
+		id INTEGER PRIMARY KEY AUTOINCREMENT,
+		workflow_run_id INTEGER NOT NULL,
+		node_id TEXT NOT NULL,
+		script_id INTEGER NOT NULL,
+		script_name TEXT NOT NULL DEFAULT '',
+		status TEXT NOT NULL DEFAULT 'pending',
+		started_at DATETIME,
+		ended_at DATETIME,
+		run_record_id INTEGER,
+		sort_order INTEGER NOT NULL DEFAULT 0,
+		UNIQUE(workflow_run_id, node_id)
+	);
+	CREATE INDEX IF NOT EXISTS idx_workflow_run_nodes_run ON workflow_run_nodes(workflow_run_id, sort_order, id);
 	CREATE TABLE IF NOT EXISTS services (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		name TEXT NOT NULL UNIQUE,

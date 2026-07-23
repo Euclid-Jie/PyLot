@@ -75,3 +75,16 @@ type WorkflowRun struct {
 	StartedAt  time.Time  `json:"startedAt"`
 	EndedAt    *time.Time `json:"endedAt"`
 }
+
+type WorkflowRunNode struct {
+	ID            int        `json:"id"`
+	WorkflowRunID int        `json:"workflowRunId"`
+	NodeID        string     `json:"nodeId"`
+	ScriptID      int        `json:"scriptId"`
+	ScriptName    string     `json:"scriptName"`
+	Status        string     `json:"status"`
+	StartedAt     *time.Time `json:"startedAt"`
+	EndedAt       *time.Time `json:"endedAt"`
+	RunRecordID   int        `json:"runRecordId"`
+	SortOrder     int        `json:"sortOrder"`
+}

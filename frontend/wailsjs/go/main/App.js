@@ -102,6 +102,10 @@ export function GetWindowSize() {
   return window['go']['main']['App']['GetWindowSize']();
 }
 
+export function GetWorkflowRunNodes(arg1) {
+  return window['go']['main']['App']['GetWorkflowRunNodes'](arg1);
+}
+
 export function GetWorkflowRuns(arg1) {
   return window['go']['main']['App']['GetWorkflowRuns'](arg1);
 }

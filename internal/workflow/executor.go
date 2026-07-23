@@ -105,10 +105,10 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 		return err
 	}
 
-	// Create workflow run record
-	res, _ := db.DB.Exec(`INSERT INTO workflow_runs(workflow_id,status,started_at) VALUES(?,?,?)`,
-		workflowID, "running", time.Now())
-	runID, _ := res.LastInsertId()
+	runID, err := createWorkflowRun(workflowID, g)
+	if err != nil {
+		return fmt.Errorf("create workflow run: %w", err)
+	}
 
 	// Build adjacency: node id -> list of successor node ids
 	// Also build in-degree map
@@ -139,7 +139,10 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 
 	finishWorkflow := func(status string) {
 		now := time.Now()
-		db.DB.Exec(`UPDATE workflow_runs SET status=?,ended_at=? WHERE id=?`, status, now, runID)
+		if status != "success" {
+			db.ExecWrite(`UPDATE workflow_run_nodes SET status='skipped' WHERE workflow_run_id=? AND status='pending'`, runID)
+		}
+		db.ExecWrite(`UPDATE workflow_runs SET status=?,ended_at=? WHERE id=?`, status, now, runID)
 	}
 
 	globalEnv, _ := env.LoadGlobalEnv(globalEnvPath)
@@ -211,6 +214,8 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int, nodeID string, onStatus StatusCallback, onLog LogCallback) error {
 	s, err := script.GetByID(n.ScriptID)
 	if err != nil {
+		finishWorkflowNode(runID, nodeID, "error")
+		onStatus(runID, nodeID, n.ScriptID, "error")
 		return err
 	}
 
@@ -222,6 +227,14 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	envSnapshot := env.BuildEnvSnapshot(globalEnv, privateEnv)
 	recordID, err := script.CreateRecord(n.ScriptID, envSnapshot)
 	if err != nil {
+		finishWorkflowNode(runID, nodeID, "error")
+		onStatus(runID, nodeID, n.ScriptID, "error")
+		return err
+	}
+	if err := startWorkflowNode(runID, nodeID, int(recordID)); err != nil {
+		script.MarkError(int(recordID))
+		finishWorkflowNode(runID, nodeID, "error")
+		onStatus(runID, nodeID, n.ScriptID, "error")
 		return err
 	}
 
@@ -241,6 +254,9 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	cbs := script.RunCallbacks{
 		OnLog: func(line string, isError bool) { onLog(n.ScriptID, line, isError) },
 		OnStatus: func(status string) {
+			if status != "running" {
+				finishWorkflowNode(runID, nodeID, status)
+			}
 			onStatus(runID, nodeID, n.ScriptID, status)
 			if status != "running" {
 				select {
@@ -251,6 +267,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 		},
 		OnTimeout: func() {
 			script.MarkTimeout(int(recordID))
+			finishWorkflowNode(runID, nodeID, "timeout")
 			onStatus(runID, nodeID, n.ScriptID, "timeout")
 			select {
 			case done <- "timeout":
@@ -262,6 +279,8 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	onStatus(runID, nodeID, n.ScriptID, "running")
 	if err := script.StartScript(task, int(recordID), cbs); err != nil {
 		script.MarkError(int(recordID))
+		finishWorkflowNode(runID, nodeID, "error")
+		onStatus(runID, nodeID, n.ScriptID, "error")
 		return err
 	}
 
@@ -275,7 +294,63 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	case <-ctx.Done():
 		script.MarkKilled(int(recordID))
 		script.StopScript(n.ScriptID)
+		finishWorkflowNode(runID, nodeID, "killed")
 		onStatus(runID, nodeID, n.ScriptID, "killed")
 		return ctx.Err()
 	}
+}
+
+func createWorkflowRun(workflowID int, graph Graph) (int64, error) {
+	scriptNames := make([]string, len(graph.Nodes))
+	for i, node := range graph.Nodes {
+		s, err := script.GetByID(node.ScriptID)
+		if err != nil {
+			return 0, err
+		}
+		scriptNames[i] = s.Name
+	}
+
+	tx, err := db.DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	res, err := tx.Exec(`INSERT INTO workflow_runs(workflow_id,status,started_at) VALUES(?,?,?)`,
+		workflowID, "running", time.Now())
+	if err != nil {
+		return 0, err
+	}
+	runID, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	for i, node := range graph.Nodes {
+		if _, err := tx.Exec(`
+			INSERT INTO workflow_run_nodes(workflow_run_id,node_id,script_id,script_name,status,sort_order)
+			VALUES(?,?,?,?,?,?)`, runID, node.ID, node.ScriptID, scriptNames[i], "pending", i); err != nil {
+			return 0, err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return runID, nil
+}
+
+func startWorkflowNode(runID int, nodeID string, recordID int) error {
+	_, err := db.ExecWrite(`
+		UPDATE workflow_run_nodes
+		SET status='running',started_at=?,run_record_id=?
+		WHERE workflow_run_id=? AND node_id=? AND status='pending'`,
+		time.Now(), recordID, runID, nodeID)
+	return err
+}
+
+func finishWorkflowNode(runID int, nodeID string, status string) {
+	db.ExecWrite(`
+		UPDATE workflow_run_nodes
+		SET status=?,ended_at=?
+		WHERE workflow_run_id=? AND node_id=? AND status IN ('pending','running')`,
+		status, time.Now(), runID, nodeID)
 }

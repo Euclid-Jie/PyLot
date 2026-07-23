@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -840,6 +841,42 @@ func (a *App) GetWorkflowRuns(id int) []db.WorkflowRun {
 		list = append(list, r)
 	}
 	return list
+}
+
+func (a *App) GetWorkflowRunNodes(runID int) ([]db.WorkflowRunNode, error) {
+	rows, err := db.DB.Query(`
+		SELECT id,workflow_run_id,node_id,script_id,script_name,status,started_at,ended_at,run_record_id,sort_order
+		FROM workflow_run_nodes
+		WHERE workflow_run_id=?
+		ORDER BY sort_order,id`, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var list []db.WorkflowRunNode
+	for rows.Next() {
+		var node db.WorkflowRunNode
+		var startedAt, endedAt sql.NullTime
+		var runRecordID sql.NullInt64
+		if err := rows.Scan(
+			&node.ID, &node.WorkflowRunID, &node.NodeID, &node.ScriptID, &node.ScriptName,
+			&node.Status, &startedAt, &endedAt, &runRecordID, &node.SortOrder,
+		); err != nil {
+			return nil, err
+		}
+		if startedAt.Valid {
+			node.StartedAt = &startedAt.Time
+		}
+		if endedAt.Valid {
+			node.EndedAt = &endedAt.Time
+		}
+		if runRecordID.Valid {
+			node.RunRecordID = int(runRecordID.Int64)
+		}
+		list = append(list, node)
+	}
+	return list, rows.Err()
 }
 
 func (a *App) CopyWorkflow(id int) (int, error) {
