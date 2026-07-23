@@ -93,7 +93,7 @@ func ParseGraph(raw string) (Graph, error) {
 }
 
 // Run executes a workflow. onStatus is called on each node status change.
-func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus StatusCallback, onLog LogCallback) error {
+func Run(ctx context.Context, workflowID int, globalEnvPath, triggerSource string, scheduleID int, onStatus StatusCallback, onLog LogCallback) error {
 	var wf db.Workflow
 	row := db.DB.QueryRow(`SELECT id,name,graph FROM workflows WHERE id=?`, workflowID)
 	if err := row.Scan(&wf.ID, &wf.Name, &wf.Graph); err != nil {
@@ -105,7 +105,7 @@ func Run(ctx context.Context, workflowID int, globalEnvPath string, onStatus Sta
 		return err
 	}
 
-	runID, err := createWorkflowRun(workflowID, g)
+	runID, err := createWorkflowRun(workflowID, g, triggerSource, scheduleID)
 	if err != nil {
 		return fmt.Errorf("create workflow run: %w", err)
 	}
@@ -225,7 +225,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	}
 	mergedEnv := env.MergeEnv(globalEnv, privateEnv)
 	envSnapshot := env.BuildEnvSnapshot(globalEnv, privateEnv)
-	recordID, err := script.CreateRecord(n.ScriptID, envSnapshot)
+	recordID, err := script.CreateRecord(n.ScriptID, envSnapshot, db.TriggerSourceWorkflow, 0)
 	if err != nil {
 		finishWorkflowNode(runID, nodeID, "error")
 		onStatus(runID, nodeID, n.ScriptID, "error")
@@ -300,7 +300,7 @@ func runNode(ctx context.Context, n Node, globalEnv map[string]string, runID int
 	}
 }
 
-func createWorkflowRun(workflowID int, graph Graph) (int64, error) {
+func createWorkflowRun(workflowID int, graph Graph, triggerSource string, scheduleID int) (int64, error) {
 	scriptNames := make([]string, len(graph.Nodes))
 	for i, node := range graph.Nodes {
 		s, err := script.GetByID(node.ScriptID)
@@ -316,8 +316,12 @@ func createWorkflowRun(workflowID int, graph Graph) (int64, error) {
 	}
 	defer tx.Rollback()
 
-	res, err := tx.Exec(`INSERT INTO workflow_runs(workflow_id,status,started_at) VALUES(?,?,?)`,
-		workflowID, "running", time.Now())
+	var scheduleValue any
+	if scheduleID > 0 {
+		scheduleValue = scheduleID
+	}
+	res, err := tx.Exec(`INSERT INTO workflow_runs(workflow_id,status,started_at,trigger_source,schedule_id) VALUES(?,?,?,?,?)`,
+		workflowID, "running", time.Now(), triggerSource, scheduleValue)
 	if err != nil {
 		return 0, err
 	}

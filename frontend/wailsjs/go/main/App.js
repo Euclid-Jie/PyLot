@@ -98,6 +98,10 @@ export function GetServicePortStatus(arg1) {
   return window['go']['main']['App']['GetServicePortStatus'](arg1);
 }
 
+export function GetTopLevelRunHistory(arg1) {
+  return window['go']['main']['App']['GetTopLevelRunHistory'](arg1);
+}
+
 export function GetWindowSize() {
   return window['go']['main']['App']['GetWindowSize']();
 }

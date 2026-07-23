@@ -332,6 +332,10 @@ func (a *App) DeleteScript(id int) error {
 }
 
 func (a *App) RunScript(scriptID int, tempArgs string) error {
+	return a.runScript(scriptID, tempArgs, db.TriggerSourceManual, 0)
+}
+
+func (a *App) runScript(scriptID int, tempArgs, triggerSource string, scheduleID int) error {
 	if script.IsRunning(scriptID) {
 		return fmt.Errorf("script already running")
 	}
@@ -357,7 +361,7 @@ func (a *App) RunScript(scriptID int, tempArgs string) error {
 		args = tempArgs
 	}
 
-	recordID, err := script.CreateRecord(scriptID, envSnapshot)
+	recordID, err := script.CreateRecord(scriptID, envSnapshot, triggerSource, scheduleID)
 	if err != nil {
 		return err
 	}
@@ -452,6 +456,11 @@ func (a *App) GetLatestLog(scriptID int) *db.RunRecord {
 
 func (a *App) GetRunHistory(scriptID int) []db.RunRecord {
 	records, _ := script.GetRunHistory(scriptID)
+	return records
+}
+
+func (a *App) GetTopLevelRunHistory(scriptID int) []db.RunRecord {
+	records, _ := script.GetTopLevelRunHistory(scriptID)
 	return records
 }
 
@@ -577,9 +586,9 @@ func (a *App) SaveSchedules(schedules []db.Schedule) error {
 func (a *App) addScheduleJob(schedID, scriptID int, cronExpr string) error {
 	if scriptID < 0 {
 		wfID := -scriptID
-		return scheduler.AddJob(schedID, scriptID, cronExpr, func(_ int) { a.RunWorkflow(wfID) })
+		return scheduler.AddJob(schedID, scriptID, cronExpr, func(_ int) { a.runWorkflow(wfID, db.TriggerSourceSchedule, schedID) })
 	}
-	return scheduler.AddJob(schedID, scriptID, cronExpr, func(sid int) { a.RunScript(sid, "") })
+	return scheduler.AddJob(schedID, scriptID, cronExpr, func(sid int) { a.runScript(sid, "", db.TriggerSourceSchedule, schedID) })
 }
 
 func (a *App) DeleteSchedule(id int) error {
@@ -743,6 +752,10 @@ func (a *App) DeleteWorkflow(id int) error {
 }
 
 func (a *App) RunWorkflow(id int) error {
+	return a.runWorkflow(id, db.TriggerSourceManual, 0)
+}
+
+func (a *App) runWorkflow(id int, triggerSource string, scheduleID int) error {
 	a.workflowMu.Lock()
 	if _, running := a.workflowCancels[id]; running {
 		a.workflowMu.Unlock()
@@ -772,7 +785,7 @@ func (a *App) RunWorkflow(id int) error {
 			a.workflowMu.Unlock()
 			cancel()
 		}()
-		err := workflow.Run(runCtx, id, cfg.EnvFilePath,
+		err := workflow.Run(runCtx, id, cfg.EnvFilePath, triggerSource, scheduleID,
 			func(runID int, nodeID string, scriptID int, status string) {
 				runtime.EventsEmit(a.ctx, "workflow:node-status", map[string]interface{}{
 					"workflowId": id, "runId": runID, "nodeId": nodeID, "scriptId": scriptID, "status": status,
@@ -833,12 +846,12 @@ func (a *App) GetRunningWorkflows() []int {
 }
 
 func (a *App) GetWorkflowRuns(id int) []db.WorkflowRun {
-	rows, _ := db.DB.Query(`SELECT id,workflow_id,status,started_at,ended_at FROM workflow_runs WHERE workflow_id=? ORDER BY id DESC LIMIT 20`, id)
+	rows, _ := db.DB.Query(`SELECT id,workflow_id,status,started_at,ended_at,COALESCE(trigger_source,'unknown'),COALESCE(schedule_id,0) FROM workflow_runs WHERE workflow_id=? ORDER BY id DESC LIMIT 20`, id)
 	defer rows.Close()
 	var list []db.WorkflowRun
 	for rows.Next() {
 		var r db.WorkflowRun
-		rows.Scan(&r.ID, &r.WorkflowID, &r.Status, &r.StartedAt, &r.EndedAt)
+		rows.Scan(&r.ID, &r.WorkflowID, &r.Status, &r.StartedAt, &r.EndedAt, &r.TriggerSource, &r.ScheduleID)
 		list = append(list, r)
 	}
 	return list

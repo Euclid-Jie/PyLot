@@ -2,6 +2,13 @@ package db
 
 import "time"
 
+const (
+	TriggerSourceUnknown  = "unknown"
+	TriggerSourceManual   = "manual"
+	TriggerSourceSchedule = "schedule"
+	TriggerSourceWorkflow = "workflow"
+)
+
 type GlobalConfig struct {
 	ID          int       `json:"id"`
 	EnvFilePath string    `json:"envFilePath"`
@@ -43,15 +50,17 @@ type Schedule struct {
 }
 
 type RunRecord struct {
-	ID          int        `json:"id"`
-	ScriptID    int        `json:"scriptId"`
-	StartedAt   time.Time  `json:"startedAt"`
-	EndedAt     *time.Time `json:"endedAt"`
-	Status      string     `json:"status"`
-	LogOutput   string     `json:"logOutput"`
-	IsError     int        `json:"isError"`
-	EnvSnapshot string     `json:"envSnapshot"`
-	CreatedAt   time.Time  `json:"createdAt"`
+	ID            int        `json:"id"`
+	ScriptID      int        `json:"scriptId"`
+	StartedAt     time.Time  `json:"startedAt"`
+	EndedAt       *time.Time `json:"endedAt"`
+	Status        string     `json:"status"`
+	LogOutput     string     `json:"logOutput"`
+	IsError       int        `json:"isError"`
+	EnvSnapshot   string     `json:"envSnapshot"`
+	TriggerSource string     `json:"triggerSource"`
+	ScheduleID    int        `json:"scheduleId"`
+	CreatedAt     time.Time  `json:"createdAt"`
 }
 
 type RunningTask struct {
@@ -69,11 +78,13 @@ type Workflow struct {
 }
 
 type WorkflowRun struct {
-	ID         int        `json:"id"`
-	WorkflowID int        `json:"workflowId"`
-	Status     string     `json:"status"`
-	StartedAt  time.Time  `json:"startedAt"`
-	EndedAt    *time.Time `json:"endedAt"`
+	ID            int        `json:"id"`
+	WorkflowID    int        `json:"workflowId"`
+	Status        string     `json:"status"`
+	StartedAt     time.Time  `json:"startedAt"`
+	EndedAt       *time.Time `json:"endedAt"`
+	TriggerSource string     `json:"triggerSource"`
+	ScheduleID    int        `json:"scheduleId"`
 }
 
 type WorkflowRunNode struct {

@@ -79,6 +79,8 @@ func createTables() error {
 		log_output TEXT,
 		is_error INTEGER DEFAULT 0,
 		env_snapshot TEXT,
+		trigger_source TEXT NOT NULL DEFAULT 'unknown',
+		schedule_id INTEGER,
 		created_at DATETIME
 	);
 	CREATE TABLE IF NOT EXISTS running_tasks (
@@ -98,7 +100,9 @@ func createTables() error {
 		workflow_id INTEGER,
 		status TEXT,
 		started_at DATETIME,
-		ended_at DATETIME
+		ended_at DATETIME,
+		trigger_source TEXT NOT NULL DEFAULT 'unknown',
+		schedule_id INTEGER
 	);
 	CREATE TABLE IF NOT EXISTS workflow_run_nodes (
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -132,6 +136,11 @@ func createTables() error {
 	DB.Exec(`ALTER TABLE services ADD COLUMN protocol TEXT NOT NULL DEFAULT 'http'`)
 	DB.Exec(`ALTER TABLE scripts ADD COLUMN list_id INTEGER`)
 	DB.Exec(`ALTER TABLE scripts ADD COLUMN description TEXT NOT NULL DEFAULT ''`)
+	DB.Exec(`ALTER TABLE run_records ADD COLUMN trigger_source TEXT NOT NULL DEFAULT 'unknown'`)
+	DB.Exec(`ALTER TABLE run_records ADD COLUMN schedule_id INTEGER`)
+	DB.Exec(`ALTER TABLE workflow_runs ADD COLUMN trigger_source TEXT NOT NULL DEFAULT 'unknown'`)
+	DB.Exec(`ALTER TABLE workflow_runs ADD COLUMN schedule_id INTEGER`)
+	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_run_records_script_source ON run_records(script_id,trigger_source,id DESC)`)
 	if err := migrateScriptLists(); err != nil {
 		return err
 	}

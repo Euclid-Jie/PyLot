@@ -52,6 +52,8 @@ export function GetServiceLogs(arg1:number):Promise<Array<main.ServiceLogEntry>>
 
 export function GetServicePortStatus(arg1:number):Promise<main.ServicePortStatus>;
 
+export function GetTopLevelRunHistory(arg1:number):Promise<Array<db.RunRecord>>;
+
 export function GetWindowSize():Promise<number|number>;
 
 export function GetWorkflowRunNodes(arg1:number):Promise<Array<db.WorkflowRunNode>>;

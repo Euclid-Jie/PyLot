@@ -29,7 +29,7 @@ func TestWorkflowRunNodeLifecycle(t *testing.T) {
 	runID, err := createWorkflowRun(9, Graph{Nodes: []Node{
 		{ID: "prepare", ScriptID: 1},
 		{ID: "sync", ScriptID: 2},
-	}})
+	}}, db.TriggerSourceSchedule, 12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,22 +91,22 @@ func TestRunPersistsNodeLog(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := Run(context.Background(), 7, "", func(int, string, int, string) {}, func(int, string, bool) {}); err != nil {
+	if err := Run(context.Background(), 7, "", db.TriggerSourceManual, 0, func(int, string, int, string) {}, func(int, string, bool) {}); err != nil {
 		t.Fatal(err)
 	}
 
-	var workflowStatus, nodeStatus, logOutput string
+	var workflowStatus, workflowSource, nodeStatus, nodeSource, logOutput string
 	var recordID int
 	if err := database.QueryRow(`
-		SELECT wr.status,wrn.status,wrn.run_record_id,rr.log_output
+		SELECT wr.status,wr.trigger_source,wrn.status,wrn.run_record_id,rr.trigger_source,rr.log_output
 		FROM workflow_runs wr
 		JOIN workflow_run_nodes wrn ON wrn.workflow_run_id=wr.id
 		JOIN run_records rr ON rr.id=wrn.run_record_id
-		WHERE wr.workflow_id=7`).Scan(&workflowStatus, &nodeStatus, &recordID, &logOutput); err != nil {
+		WHERE wr.workflow_id=7`).Scan(&workflowStatus, &workflowSource, &nodeStatus, &recordID, &nodeSource, &logOutput); err != nil {
 		t.Fatal(err)
 	}
-	if workflowStatus != "success" || nodeStatus != "success" || recordID == 0 || !strings.Contains(logOutput, "workflow-node-output") {
-		t.Fatalf("unexpected persisted run: workflow=%q node=%q record=%d log=%q", workflowStatus, nodeStatus, recordID, logOutput)
+	if workflowStatus != "success" || workflowSource != db.TriggerSourceManual || nodeStatus != "success" || nodeSource != db.TriggerSourceWorkflow || recordID == 0 || !strings.Contains(logOutput, "workflow-node-output") {
+		t.Fatalf("unexpected persisted run: workflow=%q source=%q node=%q nodeSource=%q record=%d log=%q", workflowStatus, workflowSource, nodeStatus, nodeSource, recordID, logOutput)
 	}
 }
 
@@ -152,7 +152,9 @@ func newWorkflowTestDB(t *testing.T, name string) *sql.DB {
 			workflow_id INTEGER,
 			status TEXT,
 			started_at DATETIME,
-			ended_at DATETIME
+			ended_at DATETIME,
+			trigger_source TEXT NOT NULL DEFAULT 'unknown',
+			schedule_id INTEGER
 		);
 		CREATE TABLE workflow_run_nodes (
 			id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -176,6 +178,8 @@ func newWorkflowTestDB(t *testing.T, name string) *sql.DB {
 			log_output TEXT,
 			is_error INTEGER DEFAULT 0,
 			env_snapshot TEXT,
+			trigger_source TEXT NOT NULL DEFAULT 'unknown',
+			schedule_id INTEGER,
 			created_at DATETIME
 		);
 		CREATE TABLE running_tasks (

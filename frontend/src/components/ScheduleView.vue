@@ -72,11 +72,24 @@
       <div class="history-header">
         <div>
           <h3>最近运行情况</h3>
-          <span>最近 50 条</span>
+          <span>最近 50 条顶层运行</span>
         </div>
-        <button class="btn-edit" :disabled="historyLoading" @click="loadHistory()">
-          {{ historyLoading ? '刷新中' : '刷新' }}
-        </button>
+        <div class="history-actions">
+          <div class="filter-tabs" aria-label="运行来源筛选">
+            <button
+              v-for="option in historyFilterOptions"
+              :key="option.value"
+              :class="{ active: historySourceFilter === option.value }"
+              @click="changeHistoryFilter(option.value)"
+            >
+              {{ option.label }}
+              <span>{{ option.count }}</span>
+            </button>
+          </div>
+          <button class="btn-edit" :disabled="historyLoading" @click="loadHistory()">
+            {{ historyLoading ? '刷新中' : '刷新' }}
+          </button>
+        </div>
       </div>
 
       <div v-if="history.length" class="history-layout">
@@ -88,7 +101,10 @@
             :class="{ active: selectedRun && runKey(selectedRun) === runKey(run) }"
             @click="selectRun(run)"
           >
-            <span :class="['type-pill', run.targetType]">{{ targetTypeText(run.targetType) }}</span>
+            <span class="run-tags">
+              <span :class="['type-pill', run.targetType]">{{ targetTypeText(run.targetType) }}</span>
+              <span :class="['source-pill', run.triggerSource]" :title="sourceTitle(run)">{{ sourceText(run.triggerSource) }}</span>
+            </span>
             <span class="run-main">
               <strong>{{ run.targetName }}</strong>
               <small>{{ fmtDateTime(run.startedAt) }} · {{ fmtDuration(run) }}</small>
@@ -149,7 +165,7 @@
           </template>
         </div>
       </div>
-      <div v-else class="empty history-empty">暂无运行记录</div>
+      <div v-else class="empty history-empty">{{ allHistory.length ? '当前筛选下暂无运行记录' : '暂无运行记录' }}</div>
     </section>
 
     <div v-if="errorMsg" class="toast-error">{{ errorMsg }}</div>
@@ -168,13 +184,13 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { DeleteSchedule, GetRunDetail, GetRunHistory, GetScheduleOverview, GetWorkflowRunNodes, GetWorkflowRuns, ToggleSchedule } from '../../wailsjs/go/main/App.js'
+import { DeleteSchedule, GetRunDetail, GetScheduleOverview, GetTopLevelRunHistory, GetWorkflowRunNodes, GetWorkflowRuns, ToggleSchedule } from '../../wailsjs/go/main/App.js'
 import TimerModal from './TimerModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import UiIcon from './UiIcon.vue'
 
 const overview = ref([])
-const history = ref([])
+const allHistory = ref([])
 const selectedRun = ref(null)
 const detailLog = ref('')
 const detailLoading = ref(false)
@@ -189,6 +205,7 @@ const showTimer = ref(false)
 const editingSchedule = ref(null)
 const timerScriptId = ref(0)
 const scheduleFilter = ref('upcoming')
+const historySourceFilter = ref('all')
 const showDeleteId = ref(null)
 const pendingScheduleIds = ref([])
 let timer = null
@@ -210,11 +227,17 @@ const upcomingOverview = computed(() => overview.value
 const filteredOverview = computed(() => scheduleFilter.value === 'upcoming'
   ? upcomingOverview.value
   : sortedOverview.value.filter(matchesScheduleFilter))
+const history = computed(() => allHistory.value.filter(run => historySourceFilter.value === 'all' || run.triggerSource === historySourceFilter.value))
 const filterOptions = computed(() => [
   { value: 'upcoming', label: '即将运行', count: upcomingOverview.value.length },
   { value: 'today', label: '今日运行', count: overview.value.filter(item => item.enabled && isToday(item.nextRun)).length },
   { value: 'stopped', label: '已停止', count: overview.value.filter(item => !item.enabled).length },
   { value: 'all', label: '全部', count: overview.value.length },
+])
+const historyFilterOptions = computed(() => [
+  { value: 'all', label: '全部', count: allHistory.value.length },
+  { value: 'schedule', label: '仅看定时', count: allHistory.value.filter(run => run.triggerSource === 'schedule').length },
+  { value: 'manual', label: '仅看手动', count: allHistory.value.filter(run => run.triggerSource === 'manual').length },
 ])
 
 onMounted(async () => {
@@ -239,7 +262,7 @@ async function loadHistory(sourceOverview = overview.value) {
     const previousKey = selectedRun.value ? runKey(selectedRun.value) : ''
     const uniqueTargets = Array.from(new Map(sourceOverview.map(item => [item.scriptId, item])).values())
     const groups = await Promise.all(uniqueTargets.map(loadTargetHistory))
-    history.value = groups
+    allHistory.value = groups
       .flat()
       .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
       .slice(0, 50)
@@ -263,12 +286,14 @@ async function loadTargetHistory(item) {
       startedAt: record.startedAt,
       endedAt: record.endedAt,
       isError: record.status === 'error' || record.status === 'timeout' || record.status === 'killed',
+      triggerSource: record.triggerSource || 'unknown',
+      scheduleId: record.scheduleId || 0,
       logPreview: '',
       hasLog: false,
     }))
   }
 
-  const records = await GetRunHistory(item.scriptId) || []
+  const records = await GetTopLevelRunHistory(item.scriptId) || []
   return records.map(record => ({
     recordId: record.id,
     targetId: item.scriptId,
@@ -278,6 +303,8 @@ async function loadTargetHistory(item) {
     startedAt: record.startedAt,
     endedAt: record.endedAt,
     isError: record.isError === 1,
+    triggerSource: record.triggerSource || 'unknown',
+    scheduleId: record.scheduleId || 0,
     logPreview: '',
     hasLog: true,
   }))
@@ -348,6 +375,24 @@ function fmtDuration(run) {
 
 function targetTypeText(type) {
   return type === 'workflow' ? '工作流' : '脚本'
+}
+
+function sourceText(source) {
+  const labels = { schedule: '定时', manual: '手动', unknown: '历史' }
+  return labels[source] || '历史'
+}
+
+function sourceTitle(run) {
+  if (run.triggerSource === 'schedule' && run.scheduleId) return `由定时规则 #${run.scheduleId} 触发`
+  if (run.triggerSource === 'manual') return '由用户手动触发'
+  return '旧版运行记录，来源未记录'
+}
+
+async function changeHistoryFilter(source) {
+  historySourceFilter.value = source
+  const currentKey = selectedRun.value ? runKey(selectedRun.value) : ''
+  selectedRun.value = history.value.find(run => runKey(run) === currentKey) || history.value[0] || null
+  await loadSelectedDetail()
 }
 
 function statusText(status) {
@@ -577,6 +622,14 @@ function formatError(err) {
   flex-wrap: wrap;
 }
 
+.history-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
 .filter-tabs {
   display: flex;
   align-items: center;
@@ -630,8 +683,8 @@ function formatError(err) {
   font-weight: var(--weight-semibold);
 }
 
-.view-header span,
-.history-header span {
+.view-header > div:first-child > span,
+.history-header > div:first-child > span {
   display: block;
   margin-top: 2px;
   color: var(--text-muted);
@@ -844,7 +897,7 @@ code {
   width: 100%;
   min-height: 54px;
   display: grid;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  grid-template-columns: 58px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
   padding: 9px 12px;
@@ -853,6 +906,13 @@ code {
   background: transparent;
   color: var(--text);
   text-align: left;
+}
+
+.run-tags {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 3px;
 }
 
 .run-row:hover {
@@ -864,6 +924,7 @@ code {
 }
 
 .type-pill,
+.source-pill,
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -875,6 +936,8 @@ code {
 }
 
 .type-pill {
+  min-height: 19px;
+  padding: 0 4px;
   color: var(--text-dim);
   border: 1px solid var(--border);
 }
@@ -882,6 +945,30 @@ code {
 .type-pill.workflow {
   color: var(--orange);
   border-color: rgba(210,153,34,.4);
+}
+
+.source-pill {
+  min-height: 19px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+}
+
+.source-pill.schedule {
+  border-color: rgba(63,185,80,.34);
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+.source-pill.manual {
+  background: var(--surface);
+  color: var(--text-dim);
+}
+
+.source-pill.unknown {
+  border-color: rgba(210,153,34,.32);
+  background: var(--orange-dim);
+  color: var(--orange);
 }
 
 .run-main {
@@ -1182,6 +1269,16 @@ code {
     max-width: 100%;
   }
 
+  .history-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .history-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .history-layout {
     grid-template-columns: 1fr;
   }
@@ -1230,6 +1327,15 @@ code {
 }
 
 @media (max-width: 720px) {
+  .history-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .history-actions .btn-edit {
+    align-self: flex-end;
+  }
+
   .detail-meta {
     align-items: flex-start;
     flex-direction: column;

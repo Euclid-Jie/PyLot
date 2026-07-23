@@ -29,6 +29,26 @@ func TestScriptListMigrationRunsOnce(t *testing.T) {
 			('Crawler','crawler'),
 			('Processor','processor'),
 			('Tool','tool');
+		CREATE TABLE run_records (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			script_id INTEGER,
+			started_at DATETIME,
+			ended_at DATETIME,
+			status TEXT,
+			log_output TEXT,
+			is_error INTEGER DEFAULT 0,
+			env_snapshot TEXT,
+			created_at DATETIME
+		);
+		INSERT INTO run_records(script_id,status,created_at) VALUES(1,'success',CURRENT_TIMESTAMP);
+		CREATE TABLE workflow_runs (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			workflow_id INTEGER,
+			status TEXT,
+			started_at DATETIME,
+			ended_at DATETIME
+		);
+		INSERT INTO workflow_runs(workflow_id,status,started_at) VALUES(1,'success',CURRENT_TIMESTAMP);
 	`); err != nil {
 		t.Fatal(err)
 	}
@@ -44,6 +64,18 @@ func TestScriptListMigrationRunsOnce(t *testing.T) {
 	}
 	if description != "旧脚本说明" {
 		t.Fatalf("description = %q", description)
+	}
+
+	var runSource, workflowSource string
+	var runScheduleID, workflowScheduleID sql.NullInt64
+	if err := DB.QueryRow(`SELECT trigger_source,schedule_id FROM run_records WHERE id=1`).Scan(&runSource, &runScheduleID); err != nil {
+		t.Fatalf("run source migration failed: %v", err)
+	}
+	if err := DB.QueryRow(`SELECT trigger_source,schedule_id FROM workflow_runs WHERE id=1`).Scan(&workflowSource, &workflowScheduleID); err != nil {
+		t.Fatalf("workflow source migration failed: %v", err)
+	}
+	if runSource != TriggerSourceUnknown || workflowSource != TriggerSourceUnknown || runScheduleID.Valid || workflowScheduleID.Valid {
+		t.Fatalf("unexpected migrated sources: run=%q/%v workflow=%q/%v", runSource, runScheduleID, workflowSource, workflowScheduleID)
 	}
 
 	var assigned, cleared int

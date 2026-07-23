@@ -50,6 +50,8 @@ export namespace db {
 	    logOutput: string;
 	    isError: number;
 	    envSnapshot: string;
+	    triggerSource: string;
+	    scheduleId: number;
 	    // Go type: time
 	    createdAt: any;
 	
@@ -67,6 +69,8 @@ export namespace db {
 	        this.logOutput = source["logOutput"];
 	        this.isError = source["isError"];
 	        this.envSnapshot = source["envSnapshot"];
+	        this.triggerSource = source["triggerSource"];
+	        this.scheduleId = source["scheduleId"];
 	        this.createdAt = this.convertValues(source["createdAt"], null);
 	    }
 	
@@ -251,6 +255,8 @@ export namespace db {
 	    startedAt: any;
 	    // Go type: time
 	    endedAt?: any;
+	    triggerSource: string;
+	    scheduleId: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new WorkflowRun(source);
@@ -263,6 +269,8 @@ export namespace db {
 	        this.status = source["status"];
 	        this.startedAt = this.convertValues(source["startedAt"], null);
 	        this.endedAt = this.convertValues(source["endedAt"], null);
+	        this.triggerSource = source["triggerSource"];
+	        this.scheduleId = source["scheduleId"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

@@ -329,10 +329,14 @@ func CleanupStaleRuns() error {
 	return err
 }
 
-func CreateRecord(scriptID int, envSnapshot string) (int64, error) {
+func CreateRecord(scriptID int, envSnapshot, triggerSource string, scheduleID int) (int64, error) {
+	var scheduleValue any
+	if scheduleID > 0 {
+		scheduleValue = scheduleID
+	}
 	res, err := db.ExecWrite(
-		`INSERT INTO run_records(script_id,started_at,status,log_output,is_error,env_snapshot,created_at) VALUES(?,?,?,?,?,?,?)`,
-		scriptID, time.Now(), "running", "", 0, envSnapshot, time.Now(),
+		`INSERT INTO run_records(script_id,started_at,status,log_output,is_error,env_snapshot,trigger_source,schedule_id,created_at) VALUES(?,?,?,?,?,?,?,?,?)`,
+		scriptID, time.Now(), "running", "", 0, envSnapshot, triggerSource, scheduleValue, time.Now(),
 	)
 	if err != nil {
 		return 0, err
@@ -342,7 +346,7 @@ func CreateRecord(scriptID int, envSnapshot string) (int64, error) {
 
 func GetLatestRecord(scriptID int) (*db.RunRecord, error) {
 	row := db.DB.QueryRow(
-		`SELECT id,script_id,started_at,ended_at,status,log_output,is_error,env_snapshot,created_at FROM run_records WHERE script_id=? ORDER BY id DESC LIMIT 1`,
+		`SELECT id,script_id,started_at,ended_at,status,log_output,is_error,env_snapshot,COALESCE(trigger_source,'unknown'),COALESCE(schedule_id,0),created_at FROM run_records WHERE script_id=? ORDER BY id DESC LIMIT 1`,
 		scriptID,
 	)
 	return scanRecord(row)
@@ -350,7 +354,27 @@ func GetLatestRecord(scriptID int) (*db.RunRecord, error) {
 
 func GetRunHistory(scriptID int) ([]db.RunRecord, error) {
 	rows, err := db.DB.Query(
-		`SELECT id,script_id,started_at,ended_at,status,'',is_error,env_snapshot,created_at FROM run_records WHERE script_id=? ORDER BY id DESC LIMIT 20`,
+		`SELECT id,script_id,started_at,ended_at,status,'',is_error,env_snapshot,COALESCE(trigger_source,'unknown'),COALESCE(schedule_id,0),created_at FROM run_records WHERE script_id=? ORDER BY id DESC LIMIT 20`,
+		scriptID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var records []db.RunRecord
+	for rows.Next() {
+		r, err := scanRecord(rows)
+		if err == nil {
+			records = append(records, *r)
+		}
+	}
+	return records, nil
+}
+
+func GetTopLevelRunHistory(scriptID int) ([]db.RunRecord, error) {
+	rows, err := db.DB.Query(
+		`SELECT id,script_id,started_at,ended_at,status,'',is_error,env_snapshot,COALESCE(trigger_source,'unknown'),COALESCE(schedule_id,0),created_at
+		 FROM run_records WHERE script_id=? AND COALESCE(trigger_source,'unknown')<>'workflow' ORDER BY id DESC LIMIT 20`,
 		scriptID,
 	)
 	if err != nil {
@@ -369,7 +393,7 @@ func GetRunHistory(scriptID int) ([]db.RunRecord, error) {
 
 func GetRunDetail(recordID int) (*db.RunRecord, error) {
 	row := db.DB.QueryRow(
-		`SELECT id,script_id,started_at,ended_at,status,log_output,is_error,env_snapshot,created_at FROM run_records WHERE id=?`,
+		`SELECT id,script_id,started_at,ended_at,status,log_output,is_error,env_snapshot,COALESCE(trigger_source,'unknown'),COALESCE(schedule_id,0),created_at FROM run_records WHERE id=?`,
 		recordID,
 	)
 	return scanRecord(row)
@@ -382,7 +406,7 @@ type scanner interface {
 func scanRecord(s scanner) (*db.RunRecord, error) {
 	var r db.RunRecord
 	var endedAt sql.NullTime
-	err := s.Scan(&r.ID, &r.ScriptID, &r.StartedAt, &endedAt, &r.Status, &r.LogOutput, &r.IsError, &r.EnvSnapshot, &r.CreatedAt)
+	err := s.Scan(&r.ID, &r.ScriptID, &r.StartedAt, &endedAt, &r.Status, &r.LogOutput, &r.IsError, &r.EnvSnapshot, &r.TriggerSource, &r.ScheduleID, &r.CreatedAt)
 	if err != nil {
 		return nil, err
 	}
