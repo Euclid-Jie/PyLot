@@ -49,7 +49,7 @@ cd frontend && npm install && cd ..
 ### 后端（Go）
 
 - `main.go` — Wails 启动 + systray 托盘（`goruntime.LockOSThread()` 保证消息泵稳定）。Wails `SingleInstanceLock` 防多开并在二次启动时显示已有窗口；双托盘图标（`icon_free.ico` / `icon_busy.ico`）随运行状态切换；关闭窗口触发 `OnBeforeClose` 隐藏到托盘；托盘右键菜单：显示主窗口 / 定时任务 / 退出（`os.Exit(0)`）。
-- `app.go` — 所有暴露给前端的方法（Wails bind）。包含文件对话框、VS Code 打开工作目录、脚本推断、窗口大小读写、Workflow CRUD、Service CRUD/控制/日志等。
+- `app.go` — 所有暴露给前端的方法（Wails bind）。包含文件对话框、VS Code 打开工作目录、脚本推断、窗口大小读写、Workflow CRUD、Service CRUD/控制/日志等；首次读取脚本、脚本列表和工作流时通过 `startupDone` 等待后端启动完成，避免数据库初始化竞态。
 - `internal/db/` — SQLite 初始化建表（11张表）+ WAL 模式（防并发写丢失）+ `busy_timeout=5000`；`write.go` 对脚本日志、运行状态等核心写入做进程内串行化和 SQLite busy/locked 短重试；`workflow_run_nodes` 保存工作流批次的节点快照、状态、耗时及对应 `run_records`；`script_lists` 保存用户脚本列表，`scripts.list_id` 为空表示未分类；`schema_migrations` 保证旧 category 到动态列表的迁移只执行一次；`global_config` 含 `lark_cli_path`/`lark_open_id` 字段；`services` 表保存服务命令、工作目录、跟随 PyLot 启动开关、访问端口和协议；日志清理（7天）。数据库文件在 exe 同目录。
 - `internal/scriptlist/` — 脚本列表 CRUD。列表名称唯一；删除列表时只将脚本移入“未分类”，不会删除脚本。
 - `internal/commandline/` — Windows 命令行解析工具，封装 `windows.DecomposeCommandLine`，供脚本 custom 模式、固定参数解析和服务命令复用；相对可执行文件优先按 WorkDir 解析。

@@ -28,17 +28,24 @@ import (
 
 type App struct {
 	ctx             context.Context
+	startupDone     chan struct{}
+	startupErr      error
 	workflowMu      sync.Mutex
 	workflowCancels map[int]context.CancelFunc
 }
 
 func NewApp() *App {
-	return &App{workflowCancels: make(map[int]context.CancelFunc)}
+	return &App{
+		startupDone:     make(chan struct{}),
+		workflowCancels: make(map[int]context.CancelFunc),
+	}
 }
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	if err := db.Init(); err != nil {
+		a.startupErr = err
+		close(a.startupDone)
 		fmt.Println("DB init error:", err)
 		return
 	}
@@ -50,6 +57,15 @@ func (a *App) startup(ctx context.Context) {
 	a.loadSchedules()
 	scheduler.Start()
 	a.autoStartServices()
+	close(a.startupDone)
+}
+
+func (a *App) waitForStartup() error {
+	<-a.startupDone
+	if a.startupErr != nil {
+		return fmt.Errorf("application startup failed: %w", a.startupErr)
+	}
+	return nil
 }
 
 func (a *App) shutdown(ctx context.Context) {
@@ -187,14 +203,18 @@ func (a *App) SaveGlobalConfig(cfg db.GlobalConfig) error {
 	return err
 }
 
-func (a *App) GetScripts() []db.Script {
-	scripts, _ := script.GetAll()
-	return scripts
+func (a *App) GetScripts() ([]db.Script, error) {
+	if err := a.waitForStartup(); err != nil {
+		return nil, err
+	}
+	return script.GetAll()
 }
 
-func (a *App) GetScriptLists() []db.ScriptList {
-	lists, _ := scriptlist.GetAll()
-	return lists
+func (a *App) GetScriptLists() ([]db.ScriptList, error) {
+	if err := a.waitForStartup(); err != nil {
+		return nil, err
+	}
+	return scriptlist.GetAll()
 }
 
 func (a *App) CreateScriptList(name string) (int, error) {
@@ -687,16 +707,24 @@ func (a *App) GetScheduleOverview() []scheduler.ScheduleInfo {
 
 // --- Workflow ---
 
-func (a *App) GetWorkflows() []db.Workflow {
-	rows, _ := db.DB.Query(`SELECT id,name,graph,created_at,updated_at FROM workflows ORDER BY id`)
+func (a *App) GetWorkflows() ([]db.Workflow, error) {
+	if err := a.waitForStartup(); err != nil {
+		return nil, err
+	}
+	rows, err := db.DB.Query(`SELECT id,name,graph,created_at,updated_at FROM workflows ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
 	defer rows.Close()
 	var list []db.Workflow
 	for rows.Next() {
 		var w db.Workflow
-		rows.Scan(&w.ID, &w.Name, &w.Graph, &w.CreatedAt, &w.UpdatedAt)
+		if err := rows.Scan(&w.ID, &w.Name, &w.Graph, &w.CreatedAt, &w.UpdatedAt); err != nil {
+			return nil, err
+		}
 		list = append(list, w)
 	}
-	return list
+	return list, rows.Err()
 }
 
 func (a *App) SaveWorkflow(w db.Workflow) (int, error) {

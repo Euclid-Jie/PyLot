@@ -1,10 +1,47 @@
 package main
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
+
+func TestWaitForStartupBlocksUntilReady(t *testing.T) {
+	app := NewApp()
+	result := make(chan error, 1)
+	go func() {
+		result <- app.waitForStartup()
+	}()
+
+	select {
+	case <-result:
+		t.Fatal("waitForStartup returned before startup completed")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	close(app.startupDone)
+	select {
+	case err := <-result:
+		if err != nil {
+			t.Fatalf("waitForStartup() error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("waitForStartup did not return after startup completed")
+	}
+}
+
+func TestWaitForStartupReturnsInitializationError(t *testing.T) {
+	app := NewApp()
+	want := errors.New("database unavailable")
+	app.startupErr = want
+	close(app.startupDone)
+
+	if err := app.waitForStartup(); !errors.Is(err, want) {
+		t.Fatalf("waitForStartup() error = %v, want wrapped %v", err, want)
+	}
+}
 
 func TestExistingDirectory(t *testing.T) {
 	dir := t.TempDir()
