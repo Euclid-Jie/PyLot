@@ -50,6 +50,10 @@ export function GetLatestLog(arg1) {
   return window['go']['main']['App']['GetLatestLog'](arg1);
 }
 
+export function GetRecentRuns(arg1) {
+  return window['go']['main']['App']['GetRecentRuns'](arg1);
+}
+
 export function GetRunDetail(arg1) {
   return window['go']['main']['App']['GetRunDetail'](arg1);
 }

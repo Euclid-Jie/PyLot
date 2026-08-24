@@ -464,6 +464,11 @@ func (a *App) GetTopLevelRunHistory(scriptID int) []db.RunRecord {
 	return records
 }
 
+func (a *App) GetRecentRuns(limit int) []db.RecentRun {
+	runs, _ := db.ListRecentRuns(limit)
+	return runs
+}
+
 func (a *App) GetRunDetail(recordID int) *db.RunRecord {
 	rec, _ := script.GetRunDetail(recordID)
 	return rec

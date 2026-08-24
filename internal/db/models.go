@@ -63,6 +63,19 @@ type RunRecord struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
+type RecentRun struct {
+	RecordID      int        `json:"recordId"`
+	TargetID      int        `json:"targetId"`
+	TargetType    string     `json:"targetType"`
+	TargetName    string     `json:"targetName"`
+	Status        string     `json:"status"`
+	StartedAt     time.Time  `json:"startedAt"`
+	EndedAt       *time.Time `json:"endedAt"`
+	IsError       int        `json:"isError"`
+	TriggerSource string     `json:"triggerSource"`
+	ScheduleID    int        `json:"scheduleId"`
+}
+
 type RunningTask struct {
 	ScriptID  int       `json:"scriptId"`
 	PID       int       `json:"pid"`

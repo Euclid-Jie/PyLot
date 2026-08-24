@@ -28,6 +28,8 @@ export function GetGlobalConfig():Promise<db.GlobalConfig>;
 
 export function GetLatestLog(arg1:number):Promise<db.RunRecord>;
 
+export function GetRecentRuns(arg1:number):Promise<Array<db.RecentRun>>;
+
 export function GetRunDetail(arg1:number):Promise<db.RunRecord>;
 
 export function GetRunHistory(arg1:number):Promise<Array<db.RunRecord>>;

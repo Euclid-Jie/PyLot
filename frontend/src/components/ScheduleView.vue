@@ -184,7 +184,7 @@
 
 <script setup>
 import { computed, ref, onMounted, onUnmounted } from 'vue'
-import { DeleteSchedule, GetRunDetail, GetScheduleOverview, GetTopLevelRunHistory, GetWorkflowRunNodes, GetWorkflowRuns, ToggleSchedule } from '../../wailsjs/go/main/App.js'
+import { DeleteSchedule, GetRecentRuns, GetRunDetail, GetScheduleOverview, GetWorkflowRunNodes, ToggleSchedule } from '../../wailsjs/go/main/App.js'
 import TimerModal from './TimerModal.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
 import UiIcon from './UiIcon.vue'
@@ -247,8 +247,8 @@ onMounted(async () => {
 onUnmounted(() => clearInterval(timer))
 
 async function load() {
-  const items = await loadOverview()
-  void loadHistory(items)
+  await loadOverview()
+  void loadHistory()
 }
 
 async function loadOverview() {
@@ -256,58 +256,22 @@ async function loadOverview() {
   return overview.value
 }
 
-async function loadHistory(sourceOverview = overview.value) {
+async function loadHistory() {
   historyLoading.value = true
   try {
     const previousKey = selectedRun.value ? runKey(selectedRun.value) : ''
-    const uniqueTargets = Array.from(new Map(sourceOverview.map(item => [item.scriptId, item])).values())
-    const groups = await Promise.all(uniqueTargets.map(loadTargetHistory))
-    allHistory.value = groups
-      .flat()
-      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime())
-      .slice(0, 50)
+    const records = await GetRecentRuns(50) || []
+    allHistory.value = records.map(run => ({
+      ...run,
+      isError: run.isError === 1,
+      triggerSource: run.triggerSource || 'unknown',
+      scheduleId: run.scheduleId || 0,
+    }))
     selectedRun.value = history.value.find(run => runKey(run) === previousKey) || history.value[0] || null
     await loadSelectedDetail()
   } finally {
     historyLoading.value = false
   }
-}
-
-async function loadTargetHistory(item) {
-  if (item.scriptId < 0) {
-    const workflowId = -item.scriptId
-    const records = await GetWorkflowRuns(workflowId) || []
-    return records.map(record => ({
-      recordId: record.id,
-      targetId: workflowId,
-      targetType: 'workflow',
-      targetName: item.scriptName || '工作流',
-      status: record.status,
-      startedAt: record.startedAt,
-      endedAt: record.endedAt,
-      isError: record.status === 'error' || record.status === 'timeout' || record.status === 'killed',
-      triggerSource: record.triggerSource || 'unknown',
-      scheduleId: record.scheduleId || 0,
-      logPreview: '',
-      hasLog: false,
-    }))
-  }
-
-  const records = await GetTopLevelRunHistory(item.scriptId) || []
-  return records.map(record => ({
-    recordId: record.id,
-    targetId: item.scriptId,
-    targetType: 'script',
-    targetName: item.scriptName || `脚本 #${item.scriptId}`,
-    status: record.status,
-    startedAt: record.startedAt,
-    endedAt: record.endedAt,
-    isError: record.isError === 1,
-    triggerSource: record.triggerSource || 'unknown',
-    scheduleId: record.scheduleId || 0,
-    logPreview: '',
-    hasLog: true,
-  }))
 }
 
 function fmtTime(t, enabled) {
