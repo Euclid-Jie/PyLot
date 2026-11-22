@@ -158,6 +158,28 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 	lastOutput := time.Now()
 	var logMu sync.Mutex
 
+	// 日志数据库写入缓冲：逐行 UPDATE 会导致 O(n²) 的磁盘写入，
+	// 这里在内存里累积，定期一次性追加到数据库。
+	var dbLogMu sync.Mutex
+	var dbLogBuf strings.Builder
+	flushLogToDB := func() {
+		dbLogMu.Lock()
+		if dbLogBuf.Len() == 0 {
+			dbLogMu.Unlock()
+			return
+		}
+		chunk := dbLogBuf.String()
+		dbLogBuf.Reset()
+		dbLogMu.Unlock()
+		db.ExecWrite(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`, chunk, recordID)
+	}
+	appendLogToDB := func(line string) {
+		dbLogMu.Lock()
+		dbLogBuf.WriteString(line)
+		dbLogBuf.WriteByte('\n')
+		dbLogMu.Unlock()
+	}
+
 	var stdoutWriter, stderrWriter *lineWriter
 	makeWriter := func(isErr bool) io.Writer {
 		lw := &lineWriter{onLine: func(line string) {
@@ -165,7 +187,7 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 			lastOutput = time.Now()
 			logMu.Unlock()
 			cbs.OnLog(line, isErr)
-			db.ExecWrite(`UPDATE run_records SET log_output = log_output || ? WHERE id = ?`, line+"\n", recordID)
+			appendLogToDB(line)
 		}}
 		if isErr {
 			stderrWriter = lw
@@ -203,11 +225,12 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 			mu.Lock()
 			_, still := runningCmds[task.ScriptID]
 			mu.Unlock()
+			stdoutWriter.Flush()
+			stderrWriter.Flush()
+			flushLogToDB()
 			if !still {
 				return
 			}
-			stdoutWriter.Flush()
-			stderrWriter.Flush()
 		}
 	}()
 
@@ -237,6 +260,7 @@ func StartScript(task RunTask, recordID int, cbs RunCallbacks) error {
 		err := cmd.Wait()
 		stdoutWriter.Flush()
 		stderrWriter.Flush()
+		flushLogToDB()
 
 		mu.Lock()
 		delete(runningCmds, task.ScriptID)

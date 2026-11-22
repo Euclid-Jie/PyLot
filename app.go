@@ -32,6 +32,7 @@ type App struct {
 	startupErr      error
 	workflowMu      sync.Mutex
 	workflowCancels map[int]context.CancelFunc
+	shutdownOnce    sync.Once
 }
 
 func NewApp() *App {
@@ -69,19 +70,48 @@ func (a *App) waitForStartup() error {
 }
 
 func (a *App) shutdown(ctx context.Context) {
+	a.shutdownOnce.Do(func() { a.doShutdown(ctx) })
+}
+
+func (a *App) doShutdown(ctx context.Context) {
 	scheduler.Stop()
 	a.workflowMu.Lock()
 	for _, cancel := range a.workflowCancels {
 		cancel()
 	}
 	a.workflowMu.Unlock()
-	for _, id := range script.GetRunningIDs() {
-		script.StopScript(id)
+
+	// 并发停止所有脚本和服务，避免串行等待
+	var wg sync.WaitGroup
+	runningIDs := script.GetRunningIDs()
+	for _, id := range runningIDs {
+		wg.Add(1)
+		go func(scriptID int) {
+			defer wg.Done()
+			script.StopScript(scriptID)
+		}(id)
 	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		svc.StopAll()
+	}()
+
+	// 等待所有停止操作完成，最多 5 秒
+	done := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		fmt.Println("Warning: shutdown timeout after 5s, forcing exit")
+	}
+
 	if err := script.CleanupStaleRuns(); err != nil {
 		fmt.Println("Stale run cleanup error:", err)
 	}
-	svc.StopAll()
 	db.DB.Close()
 }
 

@@ -3,3 +3,5 @@ node_modules
 frontend/dist
 .history
 .claude/settings.local.json
+.playwright-cli/
+

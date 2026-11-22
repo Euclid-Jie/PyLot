@@ -238,9 +238,16 @@ func StopAll() {
 		}
 	}
 	mu.Unlock()
+	// 并发停止所有服务
+	var wg sync.WaitGroup
 	for _, id := range ids {
-		_, _ = Stop(id)
+		wg.Add(1)
+		go func(serviceID int64) {
+			defer wg.Done()
+			_, _ = Stop(serviceID)
+		}(id)
 	}
+	wg.Wait()
 }
 
 func waitForExit(id int64, cmd *exec.Cmd, stdoutWriter, stderrWriter *lineWriter, cbs Callbacks) {

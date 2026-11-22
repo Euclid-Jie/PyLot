@@ -8,6 +8,13 @@ PyLot — Python 脚本调度桌面管理系统（Windows 专用）。技术栈�
 
 Go 模块名：`script-manager`（go.mod 历史遗留，勿改）。
 
+## 硬约束：不要动 PyLot 的数据和进程
+
+- **禁止**任何 agent 直接读写 `build/bin/script-manager.db`（含 `-wal` / `-shm`），包括 INSERT/UPDATE/DELETE 脚本、`schedules`、`run_records` 等任何表；只读查询同样要先拿到当次明确授权。
+- **禁止** `taskkill` / 重启 / 拉起 `PyLot.exe`，也不要为了「让配置生效」重启应用。
+- 需要新增或修改脚本、定时任务、服务时：输出要填的字段（name / work_dir / launch_command / cron）或界面操作步骤，由**用户自己在 PyLot 界面**完成。
+- 需要确认任务是否跑成功时，先问用户要截图/日志，或在用户明确同意后再只读查一次 `run_records`。
+
 ## 常用命令
 
 ```bash
@@ -48,14 +55,14 @@ cd frontend && npm install && cd ..
 
 ### 后端（Go）
 
-- `main.go` — Wails 启动 + systray 托盘（`goruntime.LockOSThread()` 保证消息泵稳定）。Wails `SingleInstanceLock` 防多开并在二次启动时显示已有窗口；双托盘图标（`icon_free.ico` / `icon_busy.ico`）随运行状态切换；关闭窗口触发 `OnBeforeClose` 隐藏到托盘；托盘右键菜单：显示主窗口 / 定时任务 / 退出（`os.Exit(0)`）。
+- `main.go` — Wails 启动 + systray 托盘（`goruntime.LockOSThread()` 保证消息泵稳定）。Wails `SingleInstanceLock` 防多开并在二次启动时显示已有窗口；双托盘图标（`icon_free.ico` / `icon_busy.ico`）随运行状态切换；关闭窗口触发 `OnBeforeClose` 隐藏到托盘；托盘右键菜单：显示主窗口 / ���时任务 / 退出（调用 `runtime.Quit`，由 `OnShutdown` 统一清理，`shutdownOnce` 防止重复执行）。
 - `app.go` — 所有暴露给前端的方法（Wails bind）。包含文件对话框、VS Code 打开工作目录、脚本推断、窗口大小读写、Workflow CRUD、Service CRUD/控制/日志等；首次读取脚本、脚本列表和工作流时通过 `startupDone` 等待后端启动完成，避免数据库初始化竞态。
 - `internal/db/` — SQLite 初始化建表（11张表）+ WAL 模式（防并发写丢失）+ `busy_timeout=5000`；`write.go` 对脚本日志、运行状态等核心写入做进程内串行化和 SQLite busy/locked 短重试；`workflow_run_nodes` 保存工作流批次的节点快照、状态、耗时及对应 `run_records`；`script_lists` 保存用户脚本列表，`scripts.list_id` 为空表示未分类；`schema_migrations` 保证旧 category 到动态列表的迁移只执行一次；`global_config` 含 `lark_cli_path`/`lark_open_id` 字段；`services` 表保存服务命令、工作目录、跟随 PyLot 启动开关、访问端口和协议；日志清理（7天）。数据库文件在 exe 同目录。
 - `internal/scriptlist/` — 脚本列表 CRUD。列表名称唯一；删除列表时只将脚本移入“未分类”，不会删除脚本。
 - `internal/commandline/` — Windows 命令行解析工具，封装 `windows.DecomposeCommandLine`，供脚本 custom 模式、固定参数解析和服务命令复用；相对可执行文件优先按 WorkDir 解析。
 - `internal/script/runner.go` — 进程启动，注入 `PYTHONIOENCODING=utf-8` 统一编码，`SysProcAttr{HideWindow: true}` 隐藏黑框，支持卡死超时检测；module 模式自动将绝对路径转换为相对 WorkDir 的点号模块名；custom 模式直接解析并执行用户填写的完整命令。
 - `internal/service/manager.go` — 长期运行服务进程管理。维护 `starting/running/stopping/exited/failed/stopped` 运行态、PID、启动/停止时间、退出码、最近错误和本次会话最近 1000 行日志；使用 Windows `DecomposeCommandLine` 解析命令，通过 `processutil.KillTree` 隐藏执行 `taskkill /F /T /PID` 并停止进程树；`port_windows.go` 通过 Windows TCP 表查询监听 PID、进程名和路径，沿父 PID 链识别其所属服务进程树，并在结束占用进程前复核端口与 PID。
-- `internal/notify/feishu.go` — 调用 `lark-cli` 发飞书消息。`Feishu(cliPath, openID, text)` fire-and-forget；`StatusLabel(status)` 返回中文状态文字。脚本和工作流执行结束后均触发通知。
+- `internal/notify/feishu.go` — 调用 `lark-cli im +messages-send --as bot` 发飞书消息。`Feishu(cliPath, openID, text)` fire-and-forget；`StatusLabel(status)` 返回中文状态文字。脚本和工作流执行结束后均触发通知；CLI 发送错误当前不会反馈到前端。
 - `internal/scheduler/` — robfig/cron v3 封装，管理定时任务注册/移除，并提供 5 位 cron 表达式标准化与校验。`script_id < 0` 表示工作流定时任务（`-workflowId`）。
 - `internal/env/` — .env 文件解析，支持全局 env + 脚本私有 env 双层合并。
 - `internal/workflow/executor.go` — Kahn 拓扑排序 + 按层并发执行，任意节点失败则终止后续层；每次运行保存节点名称快照、状态、耗时和脚本运行记录关联，未进入执行层的后续节点标记为 `skipped`；保存/运行前校验节点、脚本引用、连线与循环依赖。`StopWorkflow` 通过独立 context 取消当前工作流并停止运行节点，最终状态为 `killed`。
@@ -110,5 +117,5 @@ cd frontend && npm install && cd ..
 - 服务的 `port=0` 表示不启用端口管理；配置端口后仅生成 `http(s)://127.0.0.1:{port}` 访问入口并检测 TCP 监听，不自动修改服务命令。端口冲突必须展示占用进程并经用户确认，结束前再次核对 PID；重启必须等待进程退出和端口释放。
 - 窗口大小通过 `localStorage`（`winW`/`winH`）持久化，启动时通过 `SetWindowSize` 恢复。
 - 主题/字体通过 `localStorage`（`theme`/`font`）持久化，启动时设置 `data-theme` 属性和 `--font` CSS 变量。
-- 飞书通知配置（`lark_cli_path`/`lark_open_id`）存 `global_config` 表；`notify.Feishu` 参数为空时静默跳过，不影响正常运行。
+- 飞书通知配置（`lark_cli_path`/`lark_open_id`）存 `global_config` 表；`lark_open_id` 必须是当前 CLI 应用下的用户 `ou_xxx`，不能填 App ID `cli_xxx`。Open ID 与应用/组织绑定，切换有效 profile 后必须同步更新，否则可能返回 `open_id cross app`。PyLot 不传 `--profile`，只使用 CLI 当前有效 profile；`notify.Feishu` 参数为空时静默跳过，不影响正常运行。
 - PyLot 启动和退出时调用 `script.CleanupStaleRuns()` 收敛脚本运行态：遗留的 `running` 记录会标记为 `killed`，`running_tasks` 会清空，避免异常中断后历史日志假卡住。

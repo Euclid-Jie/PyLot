@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"embed"
-	"os"
 	goruntime "runtime"
 
 	"script-manager/internal/script"
@@ -59,8 +58,9 @@ func main() {
 						runtime.WindowShow(app.ctx)
 						runtime.EventsEmit(app.ctx, "tray:schedule")
 					case <-quit.ClickedCh:
-						app.shutdown(app.ctx)
-						os.Exit(0)
+						// 通过 Wails 正常退出，触发 OnShutdown 钩子，
+						// 避免绕过 shutdown 再重复执行一次
+						runtime.Quit(app.ctx)
 					}
 				}
 			}()
